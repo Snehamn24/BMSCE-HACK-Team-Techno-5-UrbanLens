@@ -4,13 +4,14 @@ import {
   Alert, ScrollView, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ENV } from './config/env';
+import { ENV } from '../config/env';
 
 export default function SignUpScreen() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,6 +28,8 @@ export default function SignUpScreen() {
 
     if (!phone.trim()) e.phone = 'Phone number is required';
     else if (!/^[6-9]\d{9}$/.test(phone)) e.phone = 'Enter valid 10-digit Indian mobile number';
+
+    if (!address.trim()) e.address = 'Address is required';
 
     if (!password) e.password = 'Password is required';
     else if (password.length < 6) e.password = 'Minimum 6 characters';
@@ -47,16 +50,20 @@ export default function SignUpScreen() {
       const res = await fetch(`${ENV.API_BASE_URL}/auth/signup`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fullName: fullName.trim(), username: username.trim(), phone, password }),
+        body: JSON.stringify({ fullName: fullName.trim(), username: username.trim(), phone, address: address.trim(), password }),
       });
       const data = await res.json();
       if (!res.ok) {
         Alert.alert('Signup Failed', data.error || 'Something went wrong');
         return;
       }
-      Alert.alert('🎉 Success!', 'Account created! Please login.', [
-        { text: 'Login', onPress: () => router.replace('/citizen-login') },
-      ]);
+      if (Platform.OS === 'web') {
+        window.alert('🎉 Success! Account created! Please login.');
+        router.replace('/citizen-login');
+      } else {
+        Alert.alert('🎉 Success!', 'Account created! Please login.');
+        router.replace('/citizen-login');
+      }
     } catch (err) {
       Alert.alert('Network Error', 'Cannot connect to server. Make sure the backend is running.');
     } finally {
@@ -100,6 +107,7 @@ export default function SignUpScreen() {
         {renderField('Full Name', fullName, setFullName, 'fullName', { placeholder: 'Enter your full name', autoCapitalize: 'words' })}
         {renderField('Username', username, setUsername, 'username', { placeholder: 'Choose a username' })}
         {renderField('Phone Number', phone, setPhone, 'phone', { placeholder: '10-digit mobile number', keyboard: 'phone-pad' })}
+        {renderField('Full Address', address, setAddress, 'address', { placeholder: 'Enter your complete address', autoCapitalize: 'words' })}
         {renderField('Password', password, setPassword, 'password', { placeholder: 'Min 6 chars, 1 uppercase, 1 digit', secure: true })}
         {renderField('Confirm Password', confirmPassword, setConfirmPassword, 'confirmPassword', { placeholder: 'Re-enter password', secure: true })}
 
