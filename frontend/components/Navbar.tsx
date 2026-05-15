@@ -5,9 +5,13 @@ import { useRouter } from 'expo-router';
 export default function Navbar() {
   const router = useRouter();
 
+  const go = (route: string) => {
+    try { router.navigate(route as any); } catch { router.push(route as any); }
+  };
+
   return (
     <View style={s.navbar}>
-      <TouchableOpacity style={s.logoWrap} onPress={() => router.push('/')} activeOpacity={0.8}>
+      <TouchableOpacity style={s.logoWrap} onPress={() => go('/')} activeOpacity={0.8}>
         <View style={s.logoDot} />
         <Text style={s.logoText}>UrbanLens</Text>
       </TouchableOpacity>
@@ -19,17 +23,17 @@ export default function Navbar() {
           { label: 'How It Works', route: '/how-it-works' },
           { label: 'Dashboard', route: '/login' },
         ].map((link, i) => (
-          <TouchableOpacity key={i} onPress={() => router.push(link.route as any)} style={s.navLink}>
+          <TouchableOpacity key={i} onPress={() => go(link.route)} style={s.navLink}>
             <Text style={s.navLinkText}>{link.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
       <View style={s.rightSection}>
-        <TouchableOpacity style={s.loginBtn} onPress={() => router.push('/login')} activeOpacity={0.8}>
+        <TouchableOpacity style={s.loginBtn} onPress={() => go('/login')} activeOpacity={0.8}>
           <Text style={s.loginText}>Sign In</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={s.signupBtn} onPress={() => router.push('/signup')} activeOpacity={0.8}>
+        <TouchableOpacity style={s.signupBtn} onPress={() => go('/signup')} activeOpacity={0.8}>
           <Text style={s.signupText}>Get Started</Text>
         </TouchableOpacity>
       </View>

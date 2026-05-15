@@ -48,6 +48,8 @@ export default function RootLayout() {
                 <Stack.Screen name="about" />
                 <Stack.Screen name="how-it-works" />
                 <Stack.Screen name="issues" />
+                <Stack.Screen name="contractor-login" />
+                <Stack.Screen name="contractor-dashboard" />
               </Stack>
             </View>
           </View>

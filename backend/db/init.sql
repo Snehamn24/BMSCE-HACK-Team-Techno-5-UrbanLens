@@ -72,6 +72,31 @@ CREATE TABLE IF NOT EXISTS issues (
   resolved_at TIMESTAMP
 );
 
+-- Contractors table
+CREATE TABLE IF NOT EXISTS contractors (
+  contractor_id VARCHAR(20) PRIMARY KEY,
+  name VARCHAR(100) NOT NULL,
+  phone VARCHAR(15) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
+  rating NUMERIC(3,2) DEFAULT 0,
+  total_ratings INTEGER DEFAULT 0,
+  jobs_completed INTEGER DEFAULT 0,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Bids table
+CREATE TABLE IF NOT EXISTS bids (
+  id SERIAL PRIMARY KEY,
+  issue_id INTEGER REFERENCES issues(id) ON DELETE CASCADE,
+  contractor_id VARCHAR(20) REFERENCES contractors(contractor_id) ON DELETE CASCADE,
+  amount NUMERIC(12,2) NOT NULL,
+  note TEXT,
+  status VARCHAR(20) DEFAULT 'pending',
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(issue_id, contractor_id)
+);
+
 -- Spatial index for deduplication queries
 CREATE INDEX IF NOT EXISTS idx_issues_location ON issues USING GIST(location);
 CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);

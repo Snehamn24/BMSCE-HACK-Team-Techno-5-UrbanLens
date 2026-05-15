@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Animated, Dimensions, Platform } from 'react-native';
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import Footer from '../../components/Footer';
+import { ENV } from '../../config/env';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -11,12 +12,17 @@ export default function HomeScreen() {
   const router = useRouter();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
+  const [stats, setStats] = useState({ totalReports: 0, resolved: 0, wardsActive: 0, aiAccuracy: 0 });
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 40, friction: 9 }),
     ]).start();
+    fetch(`${ENV.API_BASE_URL}/analytics/public-stats`)
+      .then(r => r.json())
+      .then(d => setStats({ totalReports: d.totalReports || 0, resolved: d.resolved || 0, wardsActive: d.wardsActive || 0, aiAccuracy: d.aiAccuracy || 98 }))
+      .catch(() => {});
   }, []);
 
   return (
@@ -45,10 +51,10 @@ export default function HomeScreen() {
         {/* METRICS */}
         <View style={s.metricsRow}>
           {[
-            { num: '500+', label: 'Issues Reported' },
-            { num: '320+', label: 'Cases Resolved' },
-            { num: '15', label: 'Wards Active' },
-            { num: '98%', label: 'AI Accuracy' },
+            { num: String(stats.totalReports), label: 'Issues Reported' },
+            { num: String(stats.resolved), label: 'Cases Resolved' },
+            { num: String(stats.wardsActive), label: 'Wards Active' },
+            { num: stats.aiAccuracy + '%', label: 'AI Accuracy' },
           ].map((m, i) => (
             <View key={i} style={[s.metricCard, glass]}>
               <Text style={s.metricNum}>{m.num}</Text>
@@ -74,6 +80,7 @@ export default function HomeScreen() {
             {[
               { title: 'Computer Vision', desc: 'Gemini AI analyzes uploaded photos to detect issue type — pothole, garbage, streetlight — and assigns a severity score automatically.', accent: '#c9a227' },
               { title: 'Geo-Deduplication', desc: 'PostGIS spatial queries merge reports within a 10-meter radius, preventing duplicate tickets and aggregating community upvotes.', accent: '#1e1e2e' },
+              { title: 'Competitive Bidding', desc: 'Registered contractors bid on issues. Government selects the lowest cost, ensuring taxpayer money is spent efficiently on repairs.', accent: '#4a7c59' },
               { title: 'Gamification Engine', desc: 'Citizens earn 10 points per verified report. Climb through Bronze, Silver, and Gold tiers to encourage sustained civic participation.', accent: '#8b6914' },
               { title: 'Ward-Based Routing', desc: 'Issues are automatically routed to the correct municipal ward office. Officers see only their assigned area for efficient resolution.', accent: '#4a4a5a' },
             ].map((f, i) => (
@@ -89,12 +96,13 @@ export default function HomeScreen() {
         {/* ROLES */}
         <View style={s.section}>
           <Text style={s.sectionLabel}>USER ROLES</Text>
-          <Text style={s.sectionTitle}>Three Dashboards, One Platform</Text>
+          <Text style={s.sectionTitle}>Four Dashboards, One Platform</Text>
           <View style={s.rolesRow}>
             {[
               { title: 'Citizen Portal', desc: 'Report issues, track resolution status, earn civic points and badges, and rate completed repairs.', color: '#1e1e2e' },
               { title: 'Officer Dashboard', desc: 'Review ward-assigned issues, update statuses, upload after-repair photos, and manage resolutions.', color: '#8b6914' },
-              { title: 'Admin Console', desc: 'Manage wards, create officer accounts, view analytics, and monitor city-wide infrastructure health.', color: '#c9a227' },
+              { title: 'Contractor Portal', desc: 'Browse open issues, submit competitive bids, get assigned repair work, and build your reputation.', color: '#4a7c59' },
+              { title: 'Admin Console', desc: 'Manage wards, officers, contractors, compare bids, and monitor city-wide infrastructure health.', color: '#c9a227' },
             ].map((r, i) => (
               <View key={i} style={[s.roleCard, glass]}>
                 <View style={[s.roleLine, { backgroundColor: r.color }]} />

@@ -7,11 +7,11 @@ import { useAuth } from '../context/AuthContext';
 import { ENV } from '../config/env';
 
 const issueTypes = [
-  { id: 'pothole', emoji: '🕳️', label: 'Pothole', color: '#0891b2', description: 'Damaged road surface' },
-  { id: 'garbage', emoji: '🗑️', label: 'Garbage Dump', color: '#059669', description: 'Illegal dumping / trash' },
-  { id: 'streetlight', emoji: '💡', label: 'Broken Streetlight', color: '#d97706', description: 'Non-functional light' },
-  { id: 'drainage', emoji: '💧', label: 'Blocked Drain', color: '#7c3aed', description: 'Clogged drainage' },
-  { id: 'tree', emoji: '🌳', label: 'Fallen Tree', color: '#b45309', description: 'Blocking road/path' },
+  { id: 'pothole', label: 'Pothole', color: '#1e1e2e', description: 'Damaged road surface' },
+  { id: 'garbage', label: 'Garbage Dump', color: '#8b6914', description: 'Illegal dumping / trash' },
+  { id: 'streetlight', label: 'Broken Streetlight', color: '#c9a227', description: 'Non-functional light' },
+  { id: 'drainage', label: 'Blocked Drain', color: '#4a4a5a', description: 'Clogged drainage' },
+  { id: 'tree', label: 'Fallen Tree', color: '#6b6352', description: 'Blocking road/path' },
 ];
 
 function getLeafletMapHTML(lat: string, lng: string) {
@@ -144,28 +144,28 @@ export default function IssuesScreen() {
       formData.append('image', { uri: imageUri, name: filename, type });
       const res = await fetch(`${ENV.API_BASE_URL}/issues`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: formData });
       const data = await res.json();
-      if (!res.ok) { showPopup('Error ❌', data.error || 'Failed to submit'); }
+      if (!res.ok) { showPopup('Submission Error', data.error || 'Failed to submit'); }
       else {
         setAiResult(data.aiAnalysis || null);
         const msg = data.duplicate
-          ? `Similar issue nearby — merged! +${data.pointsEarned} pts`
-          : `Reported! +${data.pointsEarned} pts${data.aiAnalysis?.ai_powered ? '\n🤖 AI detected: ' + data.aiAnalysis.type + ' (' + Math.round(data.aiAnalysis.confidence * 100) + '% confidence)' : ''}`;
-        showPopup('Success 🎉', msg, true);
+          ? `Similar issue nearby merged. +${data.pointsEarned} pts`
+          : `Report submitted. +${data.pointsEarned} pts${data.aiAnalysis?.ai_powered ? '\nAI detected: ' + data.aiAnalysis.type + ' (' + Math.round(data.aiAnalysis.confidence * 100) + '%)' : ''}`;
+        showPopup('Report Submitted', msg, true);
       }
     } catch { showPopup('Network Error', 'Cannot connect to server.'); }
     finally { setLoading(false); }
   };
 
   if (!token || user?.role !== 'citizen') {
-    return (<View style={st.center}><Text style={{ color: '#64748b' }}>You must be logged in as a Citizen.</Text>
-      <TouchableOpacity style={st.ctaBtn} onPress={() => router.replace('/citizen-login')}><Text style={st.ctaBtnText}>Login</Text></TouchableOpacity></View>);
+    return (<View style={st.center}><Text style={{ color: '#6b6352' }}>You must be logged in as a Citizen.</Text>
+      <TouchableOpacity style={st.ctaBtn} onPress={() => router.replace('/citizen-login')}><Text style={st.ctaBtnText}>Sign In</Text></TouchableOpacity></View>);
   }
 
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={st.container}>
         <View style={st.header}>
-          <Text style={st.title}>📍 Civic Tracker</Text>
+          <Text style={st.title}>Civic Report</Text>
           <View style={st.stepIndicator}>
             {[1, 2, 3].map(s => (<View key={s} style={[st.stepDot, step >= s && st.stepDotActive]} />))}
           </View>
@@ -178,7 +178,7 @@ export default function IssuesScreen() {
             {issueTypes.map(issue => (
               <TouchableOpacity key={issue.id} style={[st.card, selectedType === issue.id && { borderColor: issue.color, borderWidth: 2 }]}
                 onPress={() => { setSelectedType(issue.id); setStep(2); }} activeOpacity={0.8}>
-                <View style={[st.emojiBox, { backgroundColor: issue.color + '15' }]}><Text style={st.cardEmoji}>{issue.emoji}</Text></View>
+                <View style={[st.emojiBox, { backgroundColor: issue.color + '15' }]}><View style={{width:8,height:8,borderRadius:4,backgroundColor:issue.color}}/></View>
                 <View style={st.cardTextBlock}>
                   <Text style={[st.cardTitle, { color: issue.color }]}>{issue.label}</Text>
                   <Text style={st.cardDesc}>{issue.description}</Text>
@@ -191,22 +191,22 @@ export default function IssuesScreen() {
 
         {step === 2 && (
           <Animated.View style={{ opacity: fadeAnim }}>
-            <Text style={st.instruction}>📸 Photo & 📍 Location</Text>
+            <Text style={st.instruction}>Photo & Location</Text>
             <View style={st.section}>
               {imageUri ? <Image source={{ uri: imageUri }} style={st.previewImg} /> : (
-                <View style={st.placeholder}><Text style={{ fontSize: 36, marginBottom: 8 }}>📷</Text><Text style={st.placeholderText}>No image selected</Text></View>
+                <View style={st.placeholder}><Text style={st.placeholderText}>No image selected</Text></View>
               )}
               <View style={st.btnRow}>
-                <TouchableOpacity style={st.secBtn} onPress={takePhoto}><Text style={st.secBtnText}>📸 Take Photo</Text></TouchableOpacity>
+                <TouchableOpacity style={st.secBtn} onPress={takePhoto}><Text style={st.secBtnText}>Take Photo</Text></TouchableOpacity>
                 <View style={{ width: 10 }} />
-                <TouchableOpacity style={st.secBtn} onPress={pickImage}><Text style={st.secBtnText}>📁 Upload</Text></TouchableOpacity>
+                <TouchableOpacity style={st.secBtn} onPress={pickImage}><Text style={st.secBtnText}>Upload</Text></TouchableOpacity>
               </View>
             </View>
             <View style={st.section}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <Text style={st.label}>Location Details</Text>
                 <TouchableOpacity style={st.liveLocBtn} onPress={getLiveLocation} disabled={gettingLocation}>
-                  {gettingLocation ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.liveLocText}>📍 Live Location</Text>}
+                  {gettingLocation ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.liveLocText}>Live Location</Text>}
                 </TouchableOpacity>
               </View>
               <View style={st.coordRow}>
@@ -216,9 +216,9 @@ export default function IssuesScreen() {
               </View>
               {latitude && longitude && Platform.OS === 'web' && (
                 <View style={st.mapWrap}>
-                  <Text style={st.mapHint}>📌 Drag pin or click to set location</Text>
+                  <Text style={st.mapHint}>Drag pin or click to set location</Text>
                   {/* @ts-ignore */}
-                  <iframe srcDoc={getLeafletMapHTML(latitude, longitude)} width="100%" height="220" style={{ border: 0, borderRadius: 8 }} />
+                  <iframe srcDoc={getLeafletMapHTML(latitude, longitude)} width="100%" height="160" style={{ border: 0, borderRadius: 8 }} />
                 </View>
               )}
               <Text style={[st.label, { marginTop: 10 }]}>Address/Landmark</Text>
@@ -242,20 +242,20 @@ export default function IssuesScreen() {
 
         {step === 3 && (
           <Animated.View style={{ opacity: fadeAnim }}>
-            <Text style={st.instruction}>📝 Final Details</Text>
+            <Text style={st.instruction}>Final Details</Text>
             <View style={st.section}>
               <Text style={st.label}>Description (Optional)</Text>
               <TextInput style={[st.input, st.textArea]} placeholder="Extra details about the issue..."
                 placeholderTextColor="#94a3b8" value={description} onChangeText={setDescription} multiline numberOfLines={4} />
             </View>
             {validatingAI && (
-              <View style={st.aiBanner}><ActivityIndicator size="small" color="#fff" /><Text style={st.aiText}>🤖 AI Analyzing Image...</Text></View>
+              <View style={st.aiBanner}><ActivityIndicator size="small" color="#fff" /><Text style={st.aiText}>AI Analyzing Image...</Text></View>
             )}
             <View style={st.navRow}>
               <TouchableOpacity style={st.backBtn} onPress={() => setStep(2)}><Text style={st.backBtnText}>← Back</Text></TouchableOpacity>
               <TouchableOpacity style={[st.submitBtn, (loading || validatingAI) && { opacity: 0.6 }]}
                 onPress={handleSubmit} disabled={loading || validatingAI}>
-                {loading && !validatingAI ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.primaryBtnText}>✅ Submit Report</Text>}
+                {loading && !validatingAI ? <ActivityIndicator size="small" color="#fff" /> : <Text style={st.primaryBtnText}>Submit Report</Text>}
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -265,7 +265,7 @@ export default function IssuesScreen() {
       {/* Ward Picker */}
       <Modal visible={wardPickerVisible} transparent animationType="slide">
         <View style={st.modalOv}><View style={st.pickerModal}>
-          <Text style={{ fontSize: 18, fontWeight: '800', marginBottom: 16, color: '#0f172a' }}>🏛️ Select Your Ward</Text>
+          <Text style={{ fontSize: 18, fontWeight: '800', marginBottom: 16, color: '#1e1e2e' }}>Select Your Ward</Text>
           <ScrollView style={{ maxHeight: 300 }}>
             {wards.length === 0 ? <Text style={{ color: '#94a3b8', textAlign: 'center', padding: 20 }}>No wards available.</Text> :
             wards.map(w => (
@@ -285,7 +285,7 @@ export default function IssuesScreen() {
       <Modal visible={popupVisible} transparent animationType="none" onRequestClose={hidePopup}>
         <View style={st.modalOv}>
           <Animated.View style={[st.modalC, { transform: [{ scale: popupScale }] }]}>
-            <Text style={{ fontSize: 36, marginBottom: 16 }}>{popupSuccess ? '🎉' : '⚠️'}</Text>
+            <View style={{width:12,height:12,borderRadius:6,backgroundColor:popupSuccess?'#4a7c59':'#c9a227',marginBottom:16}}/>
             <Text style={st.modalTitle}>{popupTitle}</Text>
             <Text style={st.modalMsg}>{popupMessage}</Text>
             <TouchableOpacity style={[st.modalBtn, popupSuccess && { backgroundColor: '#059669' }]} onPress={hidePopup}>
@@ -299,53 +299,52 @@ export default function IssuesScreen() {
 }
 
 const st = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f4f8' },
-  ctaBtn: { backgroundColor: '#0891b2', padding: 12, borderRadius: 10, marginTop: 10 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  ctaBtn: { backgroundColor: '#1e1e2e', padding: 12, borderRadius: 10, marginTop: 10 },
   ctaBtnText: { color: '#fff', fontWeight: '700' },
-  container: { padding: 20, backgroundColor: '#f0f4f8', paddingBottom: 40, flexGrow: 1 },
+  container: { padding: 24, paddingBottom: 40, flexGrow: 1 },
   header: { marginBottom: 20, alignItems: 'center' },
-  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
+  title: { fontSize: 26, fontWeight: '800', color: '#1e1e2e' },
   stepIndicator: { flexDirection: 'row', gap: 8, marginTop: 12, marginBottom: 6 },
-  stepDot: { width: 30, height: 4, borderRadius: 2, backgroundColor: '#e2e8f0' },
-  stepDotActive: { backgroundColor: '#0891b2' },
-  subtitle: { fontSize: 14, color: '#94a3b8', fontWeight: '500' },
-  instruction: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
-  card: { backgroundColor: '#fff', borderRadius: 18, padding: 18, marginBottom: 10, flexDirection: 'row', alignItems: 'center', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.04, shadowRadius: 10, elevation: 2, borderWidth: 1, borderColor: '#f1f5f9' },
-  emojiBox: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
-  cardEmoji: { fontSize: 24 },
+  stepDot: { width: 30, height: 4, borderRadius: 2, backgroundColor: 'rgba(200,180,140,0.3)' },
+  stepDotActive: { backgroundColor: '#c9a227' },
+  subtitle: { fontSize: 13, color: '#8b7e6a', fontWeight: '500' },
+  instruction: { fontSize: 17, fontWeight: '800', color: '#1e1e2e', marginBottom: 16 },
+  card: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, padding: 18, marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  emojiBox: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
   cardTextBlock: { flex: 1 },
-  cardTitle: { fontSize: 16, fontWeight: '700' },
-  cardDesc: { fontSize: 12, color: '#94a3b8', marginTop: 2 },
-  section: { backgroundColor: '#fff', borderRadius: 20, padding: 18, marginBottom: 16, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#f1f5f9' },
-  previewImg: { width: '100%', height: 200, borderRadius: 14, marginBottom: 14 },
-  placeholder: { width: '100%', height: 150, backgroundColor: '#f8fafc', borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 2, borderColor: '#e2e8f0', borderStyle: 'dashed' },
-  placeholderText: { color: '#94a3b8', fontWeight: '600' },
-  btnRow: { flexDirection: 'row', justifyContent: 'center' },
-  secBtn: { backgroundColor: '#f0f4f8', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: '#e2e8f0' },
-  secBtnText: { color: '#0891b2', fontWeight: '700', fontSize: 13 },
-  label: { fontSize: 13, fontWeight: '700', color: '#334155' },
-  liveLocBtn: { backgroundColor: '#ef4444', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
+  cardTitle: { fontSize: 15, fontWeight: '700' },
+  cardDesc: { fontSize: 12, color: '#8b7e6a', marginTop: 2 },
+  section: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 18, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  previewImg: { width: '100%', height: 180, borderRadius: 12, marginBottom: 14 },
+  placeholder: { width: '100%', height: 120, backgroundColor: 'rgba(255,255,255,0.4)', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 1.5, borderColor: 'rgba(200,180,140,0.3)', borderStyle: 'dashed' },
+  placeholderText: { color: '#8b7e6a', fontWeight: '600', fontSize: 13 },
+  btnRow: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
+  secBtn: { backgroundColor: 'rgba(255,255,255,0.5)', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)' },
+  secBtnText: { color: '#1e1e2e', fontWeight: '700', fontSize: 13 },
+  label: { fontSize: 11, fontWeight: '700', color: '#1e1e2e', textTransform: 'uppercase', letterSpacing: 0.8 },
+  liveLocBtn: { backgroundColor: '#1e1e2e', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 10 },
   liveLocText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 12, height: 46, fontSize: 14, color: '#0f172a' },
-  coordRow: { flexDirection: 'row', marginBottom: 10 },
-  mapWrap: { width: '100%', marginTop: 10, borderRadius: 10, overflow: 'hidden' },
-  mapHint: { fontSize: 11, color: '#64748b', textAlign: 'center', marginBottom: 6, fontWeight: '600' },
-  pickerBtn: { height: 46, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 12, backgroundColor: '#f8fafc', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  input: { backgroundColor: 'rgba(255,255,255,0.6)', borderWidth: 1, borderColor: 'rgba(200,180,140,0.3)', borderRadius: 12, paddingHorizontal: 12, height: 46, fontSize: 14, color: '#1e1e2e' },
+  coordRow: { flexDirection: 'row', marginBottom: 10, gap: 10 },
+  mapWrap: { width: '100%', maxWidth: 360, marginTop: 10, borderRadius: 10, overflow: 'hidden' },
+  mapHint: { fontSize: 11, color: '#8b7e6a', textAlign: 'center', marginBottom: 6, fontWeight: '600' },
+  pickerBtn: { height: 46, borderWidth: 1, borderColor: 'rgba(200,180,140,0.3)', borderRadius: 12, paddingHorizontal: 12, backgroundColor: 'rgba(255,255,255,0.6)', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   textArea: { height: 100, paddingTop: 12, textAlignVertical: 'top' },
   navRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 },
-  backBtn: { paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, backgroundColor: '#f1f5f9' },
-  backBtnText: { color: '#475569', fontWeight: '700' },
-  primaryBtn: { flex: 1, marginLeft: 12, backgroundColor: '#0891b2', paddingVertical: 14, borderRadius: 12, alignItems: 'center', shadowColor: '#0891b2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 },
-  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  submitBtn: { flex: 1, marginLeft: 12, backgroundColor: '#059669', paddingVertical: 14, borderRadius: 12, alignItems: 'center', shadowColor: '#059669', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 },
-  aiBanner: { flexDirection: 'row', backgroundColor: '#7c3aed', padding: 16, borderRadius: 14, marginTop: 16, alignItems: 'center', justifyContent: 'center', shadowColor: '#7c3aed', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 },
+  backBtn: { paddingVertical: 14, paddingHorizontal: 24, borderRadius: 12, backgroundColor: 'rgba(200,180,140,0.15)' },
+  backBtnText: { color: '#6b6352', fontWeight: '700' },
+  primaryBtn: { flex: 1, marginLeft: 12, backgroundColor: '#1e1e2e', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  submitBtn: { flex: 1, marginLeft: 12, backgroundColor: '#4a7c59', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  aiBanner: { flexDirection: 'row', backgroundColor: '#1e1e2e', padding: 16, borderRadius: 14, marginTop: 16, alignItems: 'center', justifyContent: 'center' },
   aiText: { color: '#fff', fontWeight: '700', marginLeft: 10 },
-  modalOv: { flex: 1, backgroundColor: 'rgba(15,23,42,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  pickerModal: { backgroundColor: '#fff', width: '100%', maxWidth: 400, borderRadius: 24, padding: 24 },
-  pickerItem: { padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0', marginBottom: 8 },
-  modalC: { backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '100%', maxWidth: 380, alignItems: 'center', elevation: 12 },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
-  modalMsg: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  modalBtn: { backgroundColor: '#0891b2', paddingVertical: 14, paddingHorizontal: 40, borderRadius: 14, elevation: 4 },
-  modalBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  modalOv: { flex: 1, backgroundColor: 'rgba(30,30,46,0.3)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  pickerModal: { backgroundColor: 'rgba(255,255,255,0.95)', width: '100%', maxWidth: 400, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)' },
+  pickerItem: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)', marginBottom: 8 },
+  modalC: { backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 380, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)' },
+  modalTitle: { fontSize: 18, fontWeight: '800', color: '#1e1e2e', marginBottom: 10, textAlign: 'center' },
+  modalMsg: { fontSize: 14, color: '#6b6352', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  modalBtn: { backgroundColor: '#1e1e2e', paddingVertical: 14, paddingHorizontal: 40, borderRadius: 14 },
+  modalBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

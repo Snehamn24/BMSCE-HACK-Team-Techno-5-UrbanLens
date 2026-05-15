@@ -42,7 +42,7 @@ export default function Footer() {
 }
 
 const s = StyleSheet.create({
-  footer: { backgroundColor: '#1e1e2e', paddingTop: 40, paddingBottom: 24, paddingHorizontal: 40 },
+  footer: { backgroundColor: '#1e1e2e', paddingTop: 40, paddingBottom: 24, paddingHorizontal: 40, borderTopLeftRadius: 24, borderTopRightRadius: 24, marginTop: 40 },
   top: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', gap: 32, marginBottom: 32, paddingBottom: 32, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)' },
   col: { minWidth: 180, maxWidth: 280 },
   logoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },

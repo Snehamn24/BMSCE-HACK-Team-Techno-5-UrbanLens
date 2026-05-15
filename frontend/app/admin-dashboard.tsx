@@ -1,293 +1,337 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, RefreshControl, Modal, Animated, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, RefreshControl, Platform, Modal, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { ENV } from '../config/env';
+import Footer from '../components/Footer';
 
 type Ward = { id: number; office_name: string; ward_no: string; area_name: string; };
-type Officer = { id: number; full_name: string; email: string; municipal_office: string; ward_id: number; issues_resolved: number; };
-type Analytics = { total: number; pending: number; inProgress: number; resolved: number; byType: { type: string; count: number; }[]; };
+
+const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
 
 export default function AdminDashboardScreen() {
   const router = useRouter();
   const { user, token, logout } = useAuth();
-  const [tab, setTab] = useState<'overview' | 'wards' | 'officers'>('overview');
-  const [wards, setWards] = useState<Ward[]>([]);
-  const [officers, setOfficers] = useState<Officer[]>([]);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
+  const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // Ward form
-  const [wardName, setWardName] = useState('');
-  const [wardNo, setWardNo] = useState('');
-  const [wardArea, setWardArea] = useState('');
-  const [addingWard, setAddingWard] = useState(false);
-  // Officer form
-  const [offModalVisible, setOffModalVisible] = useState(false);
-  const [offName, setOffName] = useState('');
-  const [offEmail, setOffEmail] = useState('');
-  const [offPassword, setOffPassword] = useState('');
-  const [offOffice, setOffOffice] = useState('');
-  const [offWardId, setOffWardId] = useState<number | null>(null);
-  const [addingOfficer, setAddingOfficer] = useState(false);
-  const [wardPickerVis, setWardPickerVis] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  // Analytics
+  const [analytics, setAnalytics] = useState({ total: 0, resolved: 0, pending: 0, inProgress: 0, byType: [] as any[] });
+
+  // Wards
+  const [wards, setWards] = useState<Ward[]>([]);
+  const [wardForm, setWardForm] = useState({ officeName: '', wardNo: '', areaName: '' });
+  const [wardLoading, setWardLoading] = useState(false);
+
+  // Officers
+  const [officerForm, setOfficerForm] = useState({ fullName: '', email: '', password: '', wardId: '' });
+  const [officerLoading, setOfficerLoading] = useState(false);
+
+  // Contractors
+  const [contractors, setContractors] = useState<any[]>([]);
+  const [ctrForm, setCtrForm] = useState({ contractorId: '', name: '', phone: '', password: '', wardId: '' });
+  const [ctrLoading, setCtrLoading] = useState(false);
+
   const [popup, setPopup] = useState({ visible: false, title: '', msg: '', success: false });
   const popupScale = useRef(new Animated.Value(0)).current;
+  const showPopup = (t: string, m: string, s = false) => { setPopup({ visible: true, title: t, msg: m, success: s }); Animated.spring(popupScale, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }).start(); };
+  const hidePopup = () => { Animated.timing(popupScale, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => setPopup(p => ({ ...p, visible: false }))); };
 
-  const showPopup = (title: string, msg: string, success = false) => {
-    setPopup({ visible: true, title, msg, success });
-    Animated.spring(popupScale, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }).start();
-  };
-  const hidePopup = () => {
-    Animated.timing(popupScale, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => setPopup(p => ({ ...p, visible: false })));
-  };
-
-  useEffect(() => { Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }, []);
-
-  const fetchData = async () => {
+  const fetchAll = async () => {
     if (!token) return;
     try {
-      const [wRes, oRes, aRes] = await Promise.all([
-        fetch(`${ENV.API_BASE_URL}/wards`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${ENV.API_BASE_URL}/officers`, { headers: { Authorization: `Bearer ${token}` } }),
+      const [aRes, wRes, cRes] = await Promise.all([
         fetch(`${ENV.API_BASE_URL}/analytics/dashboard`, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(`${ENV.API_BASE_URL}/wards`),
+        fetch(`${ENV.API_BASE_URL}/contractors`, { headers: { Authorization: `Bearer ${token}` } }),
       ]);
-      if (wRes.ok) { const d = await wRes.json(); setWards(d.wards || []); }
-      if (oRes.ok) { const d = await oRes.json(); setOfficers(d.officers || []); }
       if (aRes.ok) { const d = await aRes.json(); setAnalytics(d); }
+      if (wRes.ok) { const d = await wRes.json(); setWards(d.wards || []); }
+      if (cRes.ok) { const d = await cRes.json(); setContractors(d.contractors || []); }
     } catch {} finally { setLoading(false); setRefreshing(false); }
   };
 
-  useEffect(() => { fetchData(); }, [token]);
+  useEffect(() => { fetchAll(); }, [user]);
 
-  const addWard = async () => {
-    if (!wardName.trim() || !wardNo.trim() || !wardArea.trim()) return showPopup('Missing Fields', 'Fill out all ward details.');
-    setAddingWard(true);
+  const createWard = async () => {
+    if (!wardForm.officeName || !wardForm.wardNo || !wardForm.areaName) { showPopup('Validation', 'All ward fields are required.'); return; }
+    setWardLoading(true);
     try {
-      const res = await fetch(`${ENV.API_BASE_URL}/wards`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ officeName: wardName.trim(), wardNo: wardNo.trim(), areaName: wardArea.trim() }) });
+      const res = await fetch(`${ENV.API_BASE_URL}/wards`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(wardForm) });
       const d = await res.json();
-      if (res.ok) { showPopup('Ward Created ✅', `${wardName} added!`, true); setWardName(''); setWardNo(''); setWardArea(''); fetchData(); }
-      else showPopup('Error', d.error || 'Failed to create ward.');
-    } catch { showPopup('Error', 'Network error.'); } finally { setAddingWard(false); }
+      if (res.ok) { showPopup('Ward Created', `${wardForm.officeName} added.`, true); setWardForm({ officeName: '', wardNo: '', areaName: '' }); fetchAll(); }
+      else { showPopup('Error', d.error || 'Failed.'); }
+    } catch { showPopup('Error', 'Connection failed.'); } finally { setWardLoading(false); }
   };
 
-  const addOfficer = async () => {
-    if (!offName.trim() || !offEmail.trim() || !offPassword || !offOffice.trim()) return showPopup('Missing Fields', 'Fill out all fields.');
-    if (!offEmail.includes('@') || !offEmail.endsWith('.gov.in')) return showPopup('Invalid Email', 'Must use a .gov.in email.');
-    setAddingOfficer(true);
+  const deleteWard = async (id: number) => {
     try {
-      const res = await fetch(`${ENV.API_BASE_URL}/officers`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ fullName: offName.trim(), email: offEmail.trim(), password: offPassword, municipalOffice: offOffice.trim(), wardId: offWardId }) });
-      const d = await res.json();
-      if (res.ok) { showPopup('Officer Created ✅', `${offName} registered!`, true); setOffModalVisible(false); setOffName(''); setOffEmail(''); setOffPassword(''); setOffOffice(''); setOffWardId(null); fetchData(); }
-      else showPopup('Error', d.error || 'Failed to create officer.');
-    } catch { showPopup('Error', 'Network error.'); } finally { setAddingOfficer(false); }
+      const res = await fetch(`${ENV.API_BASE_URL}/wards/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { showPopup('Deleted', 'Ward removed.', true); fetchAll(); }
+    } catch { showPopup('Error', 'Failed to delete.'); }
   };
 
-  if (!user || user.role !== 'admin') return (<View style={st.center}><Text style={{ color: '#64748b' }}>Unauthorized.</Text></View>);
+  const registerOfficer = async () => {
+    if (!officerForm.fullName || !officerForm.email || !officerForm.password) { showPopup('Validation', 'Name, email, and password required.'); return; }
+    setOfficerLoading(true);
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/officers/register`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(officerForm) });
+      const d = await res.json();
+      if (res.ok) { showPopup('Officer Created', `${officerForm.fullName} registered.`, true); setOfficerForm({ fullName: '', email: '', password: '', wardId: '' }); }
+      else { showPopup('Error', d.error || 'Failed.'); }
+    } catch { showPopup('Error', 'Connection failed.'); } finally { setOfficerLoading(false); }
+  };
 
-  const typeEmojis: Record<string, string> = { pothole: '🕳️', garbage: '🗑️', streetlight: '💡', drainage: '💧', tree: '🌳' };
+  const registerContractor = async () => {
+    if (!ctrForm.contractorId || !ctrForm.name || !ctrForm.phone || !ctrForm.password) { showPopup('Validation', 'All fields required.'); return; }
+    setCtrLoading(true);
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/contractors/register`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(ctrForm) });
+      const d = await res.json();
+      if (res.ok) { showPopup('Contractor Created', `${ctrForm.name} (${ctrForm.contractorId}) registered.`, true); setCtrForm({ contractorId: '', name: '', phone: '', password: '', wardId: '' }); fetchAll(); }
+      else { showPopup('Error', d.error || 'Failed.'); }
+    } catch { showPopup('Error', 'Connection failed.'); } finally { setCtrLoading(false); }
+  };
+
+  const deleteContractor = async (id: string) => {
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/contractors/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) { showPopup('Deleted', 'Contractor removed.', true); fetchAll(); }
+    } catch { showPopup('Error', 'Failed to delete.'); }
+  };
+
+  if (!user || user.role !== 'admin') {
+    return (<View style={s.center}><Text style={s.centerText}>Admin authentication required.</Text>
+      <TouchableOpacity style={s.ctaBtn} onPress={() => router.replace('/admin-login')}><Text style={s.ctaBtnText}>Sign In</Text></TouchableOpacity></View>);
+  }
+
+  const resRate = analytics.total > 0 ? Math.round((analytics.resolved / analytics.total) * 100) : 0;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f0f4f8' }}>
-      <ScrollView contentContainerStyle={st.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor="#7c3aed" />}>
-        <Animated.View style={{ opacity: fadeAnim }}>
-          <View style={st.header}>
-            <View><Text style={st.greeting}>Admin Dashboard</Text><Text style={st.name}>{user.fullName || 'Admin'}</Text></View>
-            <TouchableOpacity style={st.logoutBtn} onPress={() => { logout(); router.replace('/'); }}><Text style={st.logoutText}>Logout</Text></TouchableOpacity>
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={s.container} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchAll(); }} tintColor="#c9a227" />}>
+        <View style={s.header}>
+          <View>
+            <Text style={s.greeting}>ADMIN CONSOLE</Text>
+            <Text style={s.name}>{user.fullName}</Text>
           </View>
+          <TouchableOpacity style={s.logoutBtn} onPress={() => { logout(); router.replace('/'); }}><Text style={s.logoutText}>Sign Out</Text></TouchableOpacity>
+        </View>
 
-          {/* Tabs */}
-          <View style={st.tabRow}>
-            {[{ id: 'overview' as const, emoji: '📊', label: 'Overview' }, { id: 'wards' as const, emoji: '🏛️', label: 'Wards' }, { id: 'officers' as const, emoji: '👷', label: 'Officers' }].map(t => (
-              <TouchableOpacity key={t.id} style={[st.tab, tab === t.id && st.tabActive]} onPress={() => setTab(t.id)}>
-                <Text style={[st.tabText, tab === t.id && st.tabTextActive]}>{t.emoji} {t.label}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        {/* Tabs */}
+        <View style={s.tabRow}>
+          {['overview', 'wards', 'officers', 'contractors'].map(tab => (
+            <TouchableOpacity key={tab} style={[s.tabBtn, activeTab === tab && s.tabActive]} onPress={() => setActiveTab(tab)}>
+              <Text style={[s.tabText, activeTab === tab && s.tabTextActive]}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-          {loading ? <ActivityIndicator size="large" color="#7c3aed" style={{ marginTop: 30 }} /> : (
-            <>
-              {tab === 'overview' && analytics && (
-                <>
-                  <View style={st.statsRow}>
-                    {[{ v: analytics.total, l: 'Total', c: '#0891b2', e: '📊' }, { v: analytics.pending, l: 'Pending', c: '#d97706', e: '⏳' },
-                      { v: analytics.inProgress, l: 'Working', c: '#3b82f6', e: '🔧' }, { v: analytics.resolved, l: 'Resolved', c: '#059669', e: '✅' }].map((x, i) => (
-                      <View key={i} style={[st.statCard, { borderTopColor: x.c }]}>
-                        <Text style={{ fontSize: 20, marginBottom: 4 }}>{x.e}</Text>
-                        <Text style={[st.statVal, { color: x.c }]}>{x.v}</Text>
-                        <Text style={st.statLbl}>{x.l}</Text>
+        {loading ? <ActivityIndicator size="large" color="#c9a227" style={{ marginTop: 40 }} /> : (
+          <>
+            {activeTab === 'overview' && (
+              <View>
+                <View style={s.statsRow}>
+                  {[
+                    { val: analytics.total, label: 'Total Reports', color: '#1e1e2e' },
+                    { val: analytics.pending, label: 'Pending', color: '#c9a227' },
+                    { val: analytics.inProgress, label: 'In Progress', color: '#8b6914' },
+                    { val: analytics.resolved, label: 'Resolved', color: '#4a7c59' },
+                  ].map((st, i) => (
+                    <View key={i} style={[s.statCard, glass]}>
+                      <Text style={[s.statValue, { color: st.color }]}>{st.val}</Text>
+                      <Text style={s.statLabel}>{st.label}</Text>
+                    </View>
+                  ))}
+                </View>
+                <View style={[s.rateCard, glass]}>
+                  <Text style={s.rateLabel}>Resolution Rate</Text>
+                  <View style={s.rateBarBg}>
+                    <View style={[s.rateBar, { width: `${resRate}%` }]} />
+                  </View>
+                  <Text style={s.rateValue}>{resRate}%</Text>
+                </View>
+                {analytics.byType?.length > 0 && (
+                  <View style={[s.typeCard, glass]}>
+                    <Text style={s.sectionTitle}>Issues by Category</Text>
+                    {analytics.byType.map((t: any, i: number) => (
+                      <View key={i} style={s.typeRow}>
+                        <Text style={s.typeName}>{t.type}</Text>
+                        <Text style={s.typeCount}>{t.count}</Text>
                       </View>
                     ))}
                   </View>
-                  {analytics.byType && analytics.byType.length > 0 && (
-                    <View style={st.chartCard}>
-                      <Text style={st.chartTitle}>Issues by Type</Text>
-                      {analytics.byType.map((t, i) => (
-                        <View key={i} style={st.barRow}>
-                          <Text style={st.barLabel}>{typeEmojis[t.type] || '📋'} {t.type}</Text>
-                          <View style={st.barBg}>
-                            <View style={[st.barFill, { width: `${Math.min(100, (t.count / Math.max(...analytics.byType.map(x => x.count))) * 100)}%` }]} />
-                          </View>
-                          <Text style={st.barVal}>{t.count}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  )}
-                  <View style={st.summaryRow}>
-                    <View style={st.summaryCard}><Text style={{ fontSize: 28 }}>🏛️</Text><Text style={st.summaryVal}>{wards.length}</Text><Text style={st.summaryLbl}>Wards</Text></View>
-                    <View style={st.summaryCard}><Text style={{ fontSize: 28 }}>👷</Text><Text style={st.summaryVal}>{officers.length}</Text><Text style={st.summaryLbl}>Officers</Text></View>
-                  </View>
-                </>
-              )}
+                )}
+              </View>
+            )}
 
-              {tab === 'wards' && (
-                <>
-                  <View style={st.formCard}>
-                    <Text style={st.formTitle}>➕ Add New Ward</Text>
-                    <TextInput style={st.input} placeholder="Ward Office Name" placeholderTextColor="#94a3b8" value={wardName} onChangeText={setWardName} />
-                    <TextInput style={st.input} placeholder="Ward Number" placeholderTextColor="#94a3b8" value={wardNo} onChangeText={setWardNo} />
-                    <TextInput style={st.input} placeholder="Area / Locality" placeholderTextColor="#94a3b8" value={wardArea} onChangeText={setWardArea} />
-                    <TouchableOpacity style={[st.primaryBtn, addingWard && { opacity: 0.6 }]} onPress={addWard} disabled={addingWard}>
-                      <Text style={st.primaryBtnText}>{addingWard ? 'Creating...' : '🏛️ Create Ward'}</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={st.listTitle}>Existing Wards ({wards.length})</Text>
-                  {wards.map(w => (
-                    <View key={w.id} style={st.listCard}>
-                      <View style={st.listIcon}><Text style={{ fontSize: 22 }}>🏛️</Text></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.listName}>{w.office_name}</Text>
-                        <Text style={st.listMeta}>Ward {w.ward_no} · {w.area_name}</Text>
-                      </View>
-                    </View>
-                  ))}
-                  {wards.length === 0 && <View style={st.empty}><Text style={{ color: '#94a3b8' }}>No wards yet.</Text></View>}
-                </>
-              )}
-
-              {tab === 'officers' && (
-                <>
-                  <TouchableOpacity style={st.primaryBtn} onPress={() => setOffModalVisible(true)}>
-                    <Text style={st.primaryBtnText}>➕ Add New Officer</Text>
+            {activeTab === 'wards' && (
+              <View>
+                <View style={[s.formCard, glass]}>
+                  <Text style={s.sectionTitle}>Add Municipal Ward</Text>
+                  <Text style={s.label}>Office Name</Text>
+                  <TextInput style={s.input} placeholder="e.g. Koramangala Ward Office" placeholderTextColor="#b0a898" value={wardForm.officeName} onChangeText={v => setWardForm(p => ({ ...p, officeName: v }))} />
+                  <Text style={s.label}>Ward Number</Text>
+                  <TextInput style={s.input} placeholder="e.g. 150" placeholderTextColor="#b0a898" value={wardForm.wardNo} onChangeText={v => setWardForm(p => ({ ...p, wardNo: v }))} />
+                  <Text style={s.label}>Area Name</Text>
+                  <TextInput style={s.input} placeholder="e.g. Koramangala" placeholderTextColor="#b0a898" value={wardForm.areaName} onChangeText={v => setWardForm(p => ({ ...p, areaName: v }))} />
+                  <TouchableOpacity style={[s.submitBtn, wardLoading && { opacity: 0.6 }]} onPress={createWard} disabled={wardLoading}>
+                    <Text style={s.submitBtnText}>{wardLoading ? 'Creating...' : 'Add Ward'}</Text>
                   </TouchableOpacity>
-                  <Text style={[st.listTitle, { marginTop: 16 }]}>Registered Officers ({officers.length})</Text>
-                  {officers.map(o => (
-                    <View key={o.id} style={st.listCard}>
-                      <View style={[st.listIcon, { backgroundColor: '#d1fae5' }]}><Text style={{ fontSize: 22 }}>👷</Text></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={st.listName}>{o.full_name}</Text>
-                        <Text style={st.listMeta}>{o.email}</Text>
-                        <Text style={st.listMeta}>🏛️ {o.municipal_office} · ✅ {o.issues_resolved} resolved</Text>
+                </View>
+                {wards.length > 0 && (
+                  <View style={[s.listCard, glass]}>
+                    <Text style={s.sectionTitle}>Existing Wards ({wards.length})</Text>
+                    {wards.map((w, i) => (
+                      <View key={w.id} style={[s.listItem, i < wards.length - 1 && s.listItemBorder]}>
+                        <View style={s.listDot} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.listName}>{w.office_name}</Text>
+                          <Text style={s.listMeta}>Ward {w.ward_no} · {w.area_name}</Text>
+                        </View>
+                        <TouchableOpacity style={s.deleteBtn} onPress={() => deleteWard(w.id)}>
+                          <Text style={s.deleteText}>Remove</Text>
+                        </TouchableOpacity>
                       </View>
-                    </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {activeTab === 'officers' && (
+              <View style={[s.formCard, glass]}>
+                <Text style={s.sectionTitle}>Register Officer</Text>
+                <Text style={s.label}>Full Name</Text>
+                <TextInput style={s.input} placeholder="Officer full name" placeholderTextColor="#b0a898" value={officerForm.fullName} onChangeText={v => setOfficerForm(p => ({ ...p, fullName: v }))} />
+                <Text style={s.label}>Official Email</Text>
+                <TextInput style={s.input} placeholder="name@dept.gov.in" placeholderTextColor="#b0a898" autoCapitalize="none" keyboardType="email-address" value={officerForm.email} onChangeText={v => setOfficerForm(p => ({ ...p, email: v }))} />
+                <Text style={s.label}>Password</Text>
+                <TextInput style={s.input} placeholder="Set a password" placeholderTextColor="#b0a898" secureTextEntry value={officerForm.password} onChangeText={v => setOfficerForm(p => ({ ...p, password: v }))} />
+                <Text style={s.label}>Assign Ward (optional)</Text>
+                <View style={s.wardSelect}>
+                  {wards.map(w => (
+                    <TouchableOpacity key={w.id} style={[s.wardOption, officerForm.wardId === String(w.id) && s.wardOptionActive]} onPress={() => setOfficerForm(p => ({ ...p, wardId: String(w.id) }))}>
+                      <Text style={[s.wardOptionText, officerForm.wardId === String(w.id) && { color: '#fff' }]}>{w.office_name}</Text>
+                    </TouchableOpacity>
                   ))}
-                  {officers.length === 0 && <View style={st.empty}><Text style={{ color: '#94a3b8' }}>No officers yet.</Text></View>}
-                </>
-              )}
-            </>
-          )}
-        </Animated.View>
+                </View>
+                <TouchableOpacity style={[s.submitBtn, { backgroundColor: '#c9a227' }, officerLoading && { opacity: 0.6 }]} onPress={registerOfficer} disabled={officerLoading}>
+                  <Text style={[s.submitBtnText, { color: '#1e1e2e' }]}>{officerLoading ? 'Registering...' : 'Register Officer'}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {activeTab === 'contractors' && (
+              <View>
+                <View style={[s.formCard, glass]}>
+                  <Text style={s.sectionTitle}>Register Contractor</Text>
+                  <Text style={s.label}>Contractor ID</Text>
+                  <TextInput style={s.input} placeholder="e.g. CTR-001" placeholderTextColor="#b0a898" autoCapitalize="characters" value={ctrForm.contractorId} onChangeText={v => setCtrForm(p => ({ ...p, contractorId: v }))} />
+                  <Text style={s.label}>Full Name</Text>
+                  <TextInput style={s.input} placeholder="Contractor name" placeholderTextColor="#b0a898" value={ctrForm.name} onChangeText={v => setCtrForm(p => ({ ...p, name: v }))} />
+                  <Text style={s.label}>Phone</Text>
+                  <TextInput style={s.input} placeholder="10-digit mobile" placeholderTextColor="#b0a898" keyboardType="phone-pad" value={ctrForm.phone} onChangeText={v => setCtrForm(p => ({ ...p, phone: v }))} />
+                  <Text style={s.label}>Password</Text>
+                  <TextInput style={s.input} placeholder="Set a password" placeholderTextColor="#b0a898" secureTextEntry value={ctrForm.password} onChangeText={v => setCtrForm(p => ({ ...p, password: v }))} />
+                  <Text style={s.label}>Assign Ward (optional)</Text>
+                  <View style={s.wardSelect}>
+                    {wards.map(w => (
+                      <TouchableOpacity key={w.id} style={[s.wardOption, ctrForm.wardId === String(w.id) && s.wardOptionActive]} onPress={() => setCtrForm(p => ({ ...p, wardId: String(w.id) }))}>
+                        <Text style={[s.wardOptionText, ctrForm.wardId === String(w.id) && { color: '#fff' }]}>{w.office_name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity style={[s.submitBtn, { backgroundColor: '#4a7c59' }, ctrLoading && { opacity: 0.6 }]} onPress={registerContractor} disabled={ctrLoading}>
+                    <Text style={s.submitBtnText}>{ctrLoading ? 'Registering...' : 'Register Contractor'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {contractors.length > 0 && (
+                  <View style={[s.listCard, glass]}>
+                    <Text style={s.sectionTitle}>Contractors ({contractors.length})</Text>
+                    {contractors.map((c: any, i: number) => (
+                      <View key={c.contractor_id} style={[s.listItem, i < contractors.length - 1 && s.listItemBorder]}>
+                        <View style={[s.listDot, { backgroundColor: '#4a7c59' }]} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.listName}>{c.name} ({c.contractor_id})</Text>
+                          <Text style={s.listMeta}>{c.phone} · Jobs: {c.jobs_completed} · Rating: {parseFloat(c.rating).toFixed(1)}/5</Text>
+                        </View>
+                        <TouchableOpacity style={s.deleteBtn} onPress={() => deleteContractor(c.contractor_id)}>
+                          <Text style={s.deleteText}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+          </>
+        )}
+        <Footer />
       </ScrollView>
 
-      {/* Officer creation modal */}
-      <Modal visible={offModalVisible} transparent animationType="slide">
-        <View style={st.modalOv}><View style={st.modalC}>
-          <Text style={st.formTitle}>👷 Create Officer</Text>
-          <TextInput style={st.input} placeholder="Full Name" placeholderTextColor="#94a3b8" value={offName} onChangeText={setOffName} />
-          <TextInput style={st.input} placeholder="email@dept.gov.in" placeholderTextColor="#94a3b8" value={offEmail} onChangeText={setOffEmail} keyboardType="email-address" autoCapitalize="none" />
-          <TextInput style={st.input} placeholder="Password" placeholderTextColor="#94a3b8" value={offPassword} onChangeText={setOffPassword} secureTextEntry />
-          <TextInput style={st.input} placeholder="Municipal Office Name" placeholderTextColor="#94a3b8" value={offOffice} onChangeText={setOffOffice} />
-          <TouchableOpacity style={st.pickerBtn} onPress={() => setWardPickerVis(true)}>
-            <Text style={{ color: offWardId ? '#0f172a' : '#94a3b8', flex: 1 }}>{offWardId ? wards.find(w => w.id === offWardId)?.office_name || 'Ward' : 'Assign to ward...'}</Text>
-            <Text style={{ color: '#94a3b8' }}>▼</Text>
-          </TouchableOpacity>
-          <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
-            <TouchableOpacity style={st.cancelBtn} onPress={() => setOffModalVisible(false)}><Text style={{ color: '#475569', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
-            <TouchableOpacity style={[st.primaryBtn, { flex: 1 }, addingOfficer && { opacity: 0.6 }]} onPress={addOfficer} disabled={addingOfficer}>
-              <Text style={st.primaryBtnText}>{addingOfficer ? 'Creating...' : 'Create'}</Text>
-            </TouchableOpacity>
-          </View>
-        </View></View>
-      </Modal>
-
-      {/* Ward picker for officer */}
-      <Modal visible={wardPickerVis} transparent animationType="slide">
-        <View style={st.modalOv}><View style={st.modalC}>
-          <Text style={{ fontSize: 18, fontWeight: '800', marginBottom: 16, color: '#0f172a' }}>🏛️ Select Ward</Text>
-          <ScrollView style={{ maxHeight: 300 }}>
-            {wards.map(w => (
-              <TouchableOpacity key={w.id} style={[st.pickerItem, offWardId === w.id && { backgroundColor: '#ede9fe', borderColor: '#7c3aed' }]} onPress={() => { setOffWardId(w.id); setWardPickerVis(false); }}>
-                <Text style={{ fontWeight: '700', color: '#0f172a' }}>{w.office_name}</Text>
-                <Text style={{ fontSize: 12, color: '#64748b' }}>Ward {w.ward_no} · {w.area_name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-          <TouchableOpacity style={{ marginTop: 12, alignItems: 'center', padding: 10 }} onPress={() => setWardPickerVis(false)}><Text style={{ color: '#64748b', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
-        </View></View>
-      </Modal>
-
-      {/* Popup */}
       <Modal visible={popup.visible} transparent animationType="none" onRequestClose={hidePopup}>
-        <View style={st.modalOv}>
-          <Animated.View style={[st.popupC, { transform: [{ scale: popupScale }] }]}>
-            <Text style={{ fontSize: 36, marginBottom: 16 }}>{popup.success ? '✅' : '⚠️'}</Text>
-            <Text style={st.popupT}>{popup.title}</Text>
-            <Text style={st.popupM}>{popup.msg}</Text>
-            <TouchableOpacity style={[st.popupBtn, popup.success && { backgroundColor: '#059669' }]} onPress={hidePopup}><Text style={{ color: '#fff', fontWeight: '700' }}>OK</Text></TouchableOpacity>
-          </Animated.View>
-        </View>
+        <View style={s.modalOv}><Animated.View style={[s.modalC, glass, { transform: [{ scale: popupScale }] }]}>
+          <Text style={s.modalT}>{popup.title}</Text><Text style={s.modalM}>{popup.msg}</Text>
+          <TouchableOpacity style={[s.modalBtn, popup.success && { backgroundColor: '#4a7c59' }]} onPress={hidePopup}><Text style={s.modalBtnT}>Dismiss</Text></TouchableOpacity>
+        </Animated.View></View>
       </Modal>
     </View>
   );
 }
 
-const st = StyleSheet.create({
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f4f8' },
-  container: { padding: 20, paddingBottom: 40 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 10, marginBottom: 16 },
-  greeting: { fontSize: 14, color: '#64748b', fontWeight: '500' },
-  name: { fontSize: 24, fontWeight: '800', color: '#0f172a', marginTop: 2 },
-  logoutBtn: { backgroundColor: '#fef2f2', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  logoutText: { color: '#ef4444', fontWeight: '700', fontSize: 13 },
-  tabRow: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 14, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: '#e2e8f0' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12 },
-  tabActive: { backgroundColor: '#7c3aed' },
-  tabText: { color: '#64748b', fontSize: 12, fontWeight: '700' },
+const s = StyleSheet.create({
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+  centerText: { fontSize: 15, color: '#6b6352' },
+  ctaBtn: { marginTop: 16, backgroundColor: '#c9a227', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  ctaBtnText: { color: '#1e1e2e', fontWeight: '700' },
+  container: { flexGrow: 1, padding: 24, paddingBottom: 0 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 },
+  greeting: { fontSize: 11, color: '#c9a227', fontWeight: '700', letterSpacing: 1.5 },
+  name: { fontSize: 24, fontWeight: '800', color: '#1e1e2e', marginTop: 4 },
+  logoutBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(200,180,140,0.3)' },
+  logoutText: { color: '#8b7e6a', fontWeight: '600', fontSize: 12 },
+  tabRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  tabBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.4)', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  tabActive: { backgroundColor: '#1e1e2e', borderColor: '#1e1e2e' },
+  tabText: { fontSize: 13, fontWeight: '600', color: '#8b7e6a' },
   tabTextActive: { color: '#fff' },
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 14, alignItems: 'center', borderTopWidth: 3, shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8, elevation: 2, borderWidth: 1, borderColor: '#f1f5f9' },
-  statVal: { fontSize: 22, fontWeight: '800' },
-  statLbl: { fontSize: 10, color: '#94a3b8', fontWeight: '700', marginTop: 2, textTransform: 'uppercase' },
-  chartCard: { backgroundColor: '#fff', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#f1f5f9' },
-  chartTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 14 },
-  barRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  barLabel: { width: 100, fontSize: 12, fontWeight: '700', color: '#475569' },
-  barBg: { flex: 1, height: 10, backgroundColor: '#f0f4f8', borderRadius: 5, marginHorizontal: 8, overflow: 'hidden' },
-  barFill: { height: '100%', backgroundColor: '#0891b2', borderRadius: 5 },
-  barVal: { fontSize: 14, fontWeight: '800', color: '#0f172a', width: 30, textAlign: 'right' },
-  summaryRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
-  summaryCard: { flex: 1, backgroundColor: '#fff', borderRadius: 18, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9' },
-  summaryVal: { fontSize: 28, fontWeight: '800', color: '#0f172a', marginTop: 8 },
-  summaryLbl: { fontSize: 12, color: '#94a3b8', fontWeight: '700', marginTop: 4 },
-  formCard: { backgroundColor: '#fff', borderRadius: 20, padding: 22, marginBottom: 20, borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 3 },
-  formTitle: { fontSize: 18, fontWeight: '800', color: '#0f172a', marginBottom: 16 },
-  input: { backgroundColor: '#f8fafc', borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, height: 48, fontSize: 14, color: '#0f172a', marginBottom: 10 },
-  pickerBtn: { height: 48, borderWidth: 1.5, borderColor: '#e2e8f0', borderRadius: 12, paddingHorizontal: 14, backgroundColor: '#f8fafc', flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
-  primaryBtn: { backgroundColor: '#7c3aed', paddingVertical: 14, borderRadius: 14, alignItems: 'center', shadowColor: '#7c3aed', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 3 },
-  primaryBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  cancelBtn: { flex: 1, backgroundColor: '#f1f5f9', paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  listTitle: { fontSize: 16, fontWeight: '800', color: '#0f172a', marginBottom: 12 },
-  listCard: { backgroundColor: '#fff', borderRadius: 16, padding: 16, marginBottom: 10, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9', shadowColor: '#0f172a', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 6, elevation: 1 },
-  listIcon: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#ede9fe', justifyContent: 'center', alignItems: 'center', marginRight: 14 },
-  listName: { fontSize: 15, fontWeight: '700', color: '#0f172a', marginBottom: 2 },
-  listMeta: { fontSize: 12, color: '#64748b' },
-  empty: { backgroundColor: '#fff', padding: 30, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: '#f1f5f9', marginTop: 10 },
-  modalOv: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(15,23,42,0.4)', padding: 20 },
-  modalC: { backgroundColor: '#fff', width: '100%', maxWidth: 440, borderRadius: 24, padding: 24 },
-  pickerItem: { padding: 14, borderRadius: 12, borderWidth: 1.5, borderColor: '#e2e8f0', marginBottom: 8 },
-  popupC: { backgroundColor: '#fff', borderRadius: 24, padding: 28, width: '100%', maxWidth: 380, alignItems: 'center', elevation: 12 },
-  popupT: { fontSize: 20, fontWeight: '800', color: '#0f172a', marginBottom: 10, textAlign: 'center' },
-  popupM: { fontSize: 14, color: '#64748b', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  popupBtn: { backgroundColor: '#7c3aed', paddingVertical: 14, paddingHorizontal: 40, borderRadius: 14, elevation: 4 },
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 16, flexWrap: 'wrap' },
+  statCard: { flex: 1, minWidth: 100, backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, padding: 18, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  statValue: { fontSize: 26, fontWeight: '800' },
+  statLabel: { fontSize: 10, color: '#8b7e6a', fontWeight: '600', marginTop: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  rateCard: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  rateLabel: { fontSize: 13, fontWeight: '700', color: '#1e1e2e', marginBottom: 10 },
+  rateBarBg: { height: 8, backgroundColor: 'rgba(200,180,140,0.2)', borderRadius: 4, overflow: 'hidden' },
+  rateBar: { height: 8, backgroundColor: '#4a7c59', borderRadius: 4 },
+  rateValue: { fontSize: 18, fontWeight: '800', color: '#4a7c59', marginTop: 8, textAlign: 'right' },
+  typeCard: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)', marginBottom: 16 },
+  typeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(200,180,140,0.1)' },
+  typeName: { fontSize: 13, color: '#1e1e2e', fontWeight: '600', textTransform: 'capitalize' },
+  typeCount: { fontSize: 13, color: '#c9a227', fontWeight: '800' },
+  sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1e1e2e', marginBottom: 16 },
+  formCard: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 18, padding: 24, marginBottom: 20, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  label: { fontSize: 11, fontWeight: '700', color: '#1e1e2e', marginBottom: 4, marginTop: 12, textTransform: 'uppercase', letterSpacing: 0.8 },
+  input: { height: 46, borderWidth: 1, borderColor: 'rgba(200,180,140,0.3)', borderRadius: 12, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.6)', fontSize: 14, color: '#1e1e2e' },
+  submitBtn: { backgroundColor: '#1e1e2e', paddingVertical: 14, borderRadius: 12, alignItems: 'center', marginTop: 16 },
+  submitBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+  listCard: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 18, padding: 20, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)', marginBottom: 20 },
+  listItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
+  listItemBorder: { borderBottomWidth: 1, borderBottomColor: 'rgba(200,180,140,0.15)' },
+  listDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#c9a227', marginRight: 12 },
+  listName: { fontSize: 14, fontWeight: '700', color: '#1e1e2e' },
+  listMeta: { fontSize: 12, color: '#8b7e6a', marginTop: 2 },
+  deleteBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(184,57,59,0.3)' },
+  deleteText: { fontSize: 11, color: '#b8393b', fontWeight: '700' },
+  wardSelect: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 },
+  wardOption: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.5)', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  wardOptionActive: { backgroundColor: '#1e1e2e', borderColor: '#1e1e2e' },
+  wardOptionText: { fontSize: 12, fontWeight: '600', color: '#6b6352' },
+  modalOv: { flex: 1, backgroundColor: 'rgba(30,30,46,0.3)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+  modalC: { backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 20, padding: 28, width: '100%', maxWidth: 380, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)' },
+  modalT: { fontSize: 18, fontWeight: '800', color: '#1e1e2e', marginBottom: 10 },
+  modalM: { fontSize: 14, color: '#6b6352', textAlign: 'center', lineHeight: 22, marginBottom: 20 },
+  modalBtn: { backgroundColor: '#1e1e2e', paddingVertical: 12, paddingHorizontal: 36, borderRadius: 12 },
+  modalBtnT: { color: '#fff', fontWeight: '700' },
 });

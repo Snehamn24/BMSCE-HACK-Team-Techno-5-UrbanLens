@@ -8,7 +8,8 @@ const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', Webki
 const roles = [
   { id: 'citizen', title: 'Citizen Portal', desc: 'Report civic issues, track resolution progress, and earn participation points.', color: '#1e1e2e', route: '/citizen-login' },
   { id: 'officer', title: 'Officer Dashboard', desc: 'Review assigned issues, update statuses, and submit resolution reports.', color: '#8b6914', route: '/officer-login' },
-  { id: 'admin', title: 'Admin Console', desc: 'Manage wards, create officer accounts, and monitor analytics.', color: '#c9a227', route: '/admin-login' },
+  { id: 'contractor', title: 'Contractor Portal', desc: 'Browse unresolved issues, submit competitive bids, and complete assigned repairs.', color: '#4a7c59', route: '/contractor-login' },
+  { id: 'admin', title: 'Admin Console', desc: 'Manage wards, officers, contractors, and monitor analytics.', color: '#c9a227', route: '/admin-login' },
 ];
 
 export default function LoginScreen() {

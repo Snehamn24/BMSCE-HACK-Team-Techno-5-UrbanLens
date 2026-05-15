@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ENV } from '../config/env';
 
-type UserRole = 'citizen' | 'officer' | 'admin';
+type UserRole = 'citizen' | 'officer' | 'admin' | 'contractor';
 
 interface User {
   id: number;
