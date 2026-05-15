@@ -26,12 +26,23 @@ CREATE TABLE IF NOT EXISTS admins (
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Municipal wards (admin-managed)
+CREATE TABLE IF NOT EXISTS wards (
+  id SERIAL PRIMARY KEY,
+  office_name VARCHAR(150) NOT NULL,
+  ward_no VARCHAR(30) NOT NULL,
+  area_name VARCHAR(150) NOT NULL,
+  created_at TIMESTAMP DEFAULT NOW(),
+  UNIQUE(office_name, ward_no)
+);
+
 -- Municipal officers (created by admin)
 CREATE TABLE IF NOT EXISTS officers (
   id SERIAL PRIMARY KEY,
   full_name VARCHAR(100) NOT NULL,
   phone VARCHAR(15) NOT NULL,
   municipal_area VARCHAR(100) NOT NULL,
+  ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
   email VARCHAR(100) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   issues_resolved INTEGER DEFAULT 0,
@@ -52,8 +63,11 @@ CREATE TABLE IF NOT EXISTS issues (
   status VARCHAR(20) DEFAULT 'pending',
   reported_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
   assigned_to INTEGER REFERENCES officers(id) ON DELETE SET NULL,
+  ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL,
   duplicate_of INTEGER REFERENCES issues(id) ON DELETE SET NULL,
   upvotes INTEGER DEFAULT 1,
+  feedback_rating INTEGER,
+  feedback_text TEXT,
   reported_at TIMESTAMP DEFAULT NOW(),
   resolved_at TIMESTAMP
 );

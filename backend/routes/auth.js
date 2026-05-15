@@ -154,7 +154,7 @@ router.post('/officer-login', async (req, res) => {
 
     const normalizedEmail = email.toLowerCase();
     const result = await pool.query(
-      'SELECT id, full_name, phone, municipal_area, email, password_hash FROM officers WHERE email = $1',
+      'SELECT id, full_name, phone, municipal_area, email, password_hash, ward_id FROM officers WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -174,6 +174,7 @@ router.post('/officer-login', async (req, res) => {
       email: officer.email,
       role: 'officer',
       municipalArea: officer.municipal_area,
+      wardId: officer.ward_id,
     });
 
     res.json({
@@ -186,6 +187,7 @@ router.post('/officer-login', async (req, res) => {
         municipalArea: officer.municipal_area,
         email: officer.email,
         role: 'officer',
+        wardId: officer.ward_id,
       },
     });
   } catch (error) {

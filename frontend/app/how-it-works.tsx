@@ -1,220 +1,67 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  LayoutAnimation,
-  Platform,
-  UIManager,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { useRouter } from 'expo-router';
+import Footer from '../components/Footer';
 
-// Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
+
 const steps = [
-  {
-    emoji: '📸',
-    number: '01',
-    title: 'Capture the Issue',
-    description:
-      'Spot a pothole, broken streetlight, or garbage pile? Take a photo directly within the app. Your location is auto-tagged using GPS.',
-  },
-  {
-    emoji: '🤖',
-    number: '02',
-    title: 'AI Classifies It',
-    description:
-      'Our AI model analyzes the photo, classifies the issue type (pothole, garbage, etc.), and assigns a severity score — all within seconds.',
-  },
-  {
-    emoji: '📍',
-    number: '03',
-    title: 'Issue is Logged',
-    description:
-      'The classified issue is stored in our database with your location, timestamp, and severity. A unique report ID is generated for tracking.',
-  },
-  {
-    emoji: '🏛️',
-    number: '04',
-    title: 'Authorities Notified',
-    description:
-      'The relevant municipal department receives an automated alert with all issue details and a priority score to act on it quickly.',
-  },
-  {
-    emoji: '🏆',
-    number: '05',
-    title: 'You Earn Points',
-    description:
-      'Every validated report earns you civic points. Climb the leaderboard and earn badges as a responsible citizen making a difference!',
-  },
+  { num: '01', title: 'Capture & Upload', desc: 'Citizens photograph a civic issue — pothole, garbage, broken streetlight — directly within the app. GPS coordinates and timestamp are auto-attached.' },
+  { num: '02', title: 'AI Classification', desc: 'Google Gemini Vision AI analyzes the uploaded image, classifies the issue type, and assigns a severity score (low/medium/high) — all within seconds.' },
+  { num: '03', title: 'Spatial Deduplication', desc: 'PostGIS queries check for existing reports within a 10-meter radius. Matching reports are merged with upvote aggregation instead of creating duplicates.' },
+  { num: '04', title: 'Ward-Based Routing', desc: 'The validated report is routed to the correct municipal ward office. The assigned officer receives it with full context: photos, location, and AI severity.' },
+  { num: '05', title: 'Resolution & Feedback', desc: 'Officers resolve issues and upload after-repair photos. Citizens earn 10 points per verified report and can rate the resolution quality.' },
 ];
 
 export default function HowItWorks() {
   const router = useRouter();
   const [expanded, setExpanded] = useState<number | null>(0);
-
-  const toggle = (index: number) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpanded(expanded === index ? null : index);
-  };
+  const toggle = (i: number) => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setExpanded(expanded === i ? null : i); };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerEmoji}>⚙️</Text>
-        <Text style={styles.headerTitle}>How Urban Lens Works</Text>
-        <Text style={styles.headerSubtitle}>
-          From photo to resolution — here's the full journey of a civic report.
-        </Text>
+    <ScrollView contentContainerStyle={s.container}>
+      <View style={s.hero}>
+        <Text style={s.heroLabel}>PLATFORM WORKFLOW</Text>
+        <Text style={s.heroTitle}>How It Works</Text>
+        <Text style={s.heroDesc}>From photo capture to resolution — the complete lifecycle of a civic report.</Text>
       </View>
-
-      {/* Steps */}
-      {steps.map((step, index) => (
-        <TouchableOpacity
-          key={index}
-          style={[styles.stepCard, expanded === index && styles.stepCardExpanded]}
-          onPress={() => toggle(index)}
-          activeOpacity={0.85}
-          accessibilityLabel={`Step ${step.number}: ${step.title}`}
-          accessibilityRole="button"
-        >
-          <View style={styles.stepHeader}>
-            <View style={styles.stepNumberBadge}>
-              <Text style={styles.stepNumber}>{step.number}</Text>
-            </View>
-            <Text style={styles.stepEmoji}>{step.emoji}</Text>
-            <Text style={styles.stepTitle}>{step.title}</Text>
-            <Text style={styles.chevron}>{expanded === index ? '▲' : '▼'}</Text>
+      {steps.map((step, i) => (
+        <TouchableOpacity key={i} style={[s.stepCard, glass, expanded === i && s.stepActive]} onPress={() => toggle(i)} activeOpacity={0.85}>
+          <View style={s.stepHeader}>
+            <View style={[s.stepNum, expanded === i && s.stepNumActive]}><Text style={[s.stepNumText, expanded === i && { color: '#fff' }]}>{step.num}</Text></View>
+            <Text style={[s.stepTitle, expanded === i && { color: '#1e1e2e' }]}>{step.title}</Text>
+            <Text style={s.chevron}>{expanded === i ? '−' : '+'}</Text>
           </View>
-          {expanded === index && (
-            <Text style={styles.stepDescription}>{step.description}</Text>
-          )}
+          {expanded === i && <Text style={s.stepDesc}>{step.desc}</Text>}
         </TouchableOpacity>
       ))}
-
-      {/* CTA */}
-      <TouchableOpacity
-        style={styles.ctaButton}
-        onPress={() => router.push('/issues')}
-        accessibilityLabel="Try it now button"
-        accessibilityRole="button"
-      >
-        <Text style={styles.ctaText}>🚀 Try It Now — Report an Issue</Text>
+      <TouchableOpacity style={s.cta} onPress={() => router.push('/issues')}>
+        <Text style={s.ctaText}>Report a Civic Issue</Text>
       </TouchableOpacity>
+      <Footer />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: '#f4f6fb',
-    paddingBottom: 40,
-  },
-  header: {
-    backgroundColor: '#1a1a2e',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  headerEmoji: {
-    fontSize: 44,
-    marginBottom: 10,
-  },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  stepCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 18,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#e0e0e0',
-  },
-  stepCardExpanded: {
-    borderLeftColor: '#1e90ff',
-  },
-  stepHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  stepNumberBadge: {
-    backgroundColor: '#1e90ff',
-    borderRadius: 20,
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepNumber: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  stepEmoji: {
-    fontSize: 22,
-  },
-  stepTitle: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#1a1a2e',
-  },
-  chevron: {
-    fontSize: 12,
-    color: '#999',
-  },
-  stepDescription: {
-    marginTop: 14,
-    fontSize: 14,
-    color: '#555',
-    lineHeight: 22,
-    paddingLeft: 4,
-  },
-  ctaButton: {
-    backgroundColor: '#1e90ff',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 12,
-    shadowColor: '#1e90ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  ctaText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: 'bold',
-  },
+const s = StyleSheet.create({
+  container: { padding: 20, paddingHorizontal: 40, paddingBottom: 0 },
+  hero: { paddingVertical: 32, marginBottom: 16 },
+  heroLabel: { fontSize: 11, fontWeight: '700', color: '#c9a227', letterSpacing: 2, marginBottom: 12 },
+  heroTitle: { fontSize: 36, fontWeight: '800', color: '#1e1e2e', letterSpacing: -0.5, marginBottom: 10 },
+  heroDesc: { fontSize: 15, color: '#6b6352', lineHeight: 24, maxWidth: 500 },
+  stepCard: { backgroundColor: 'rgba(255,255,255,0.45)', borderRadius: 16, padding: 20, marginBottom: 10, borderLeftWidth: 3, borderLeftColor: 'transparent', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  stepActive: { borderLeftColor: '#1e1e2e', backgroundColor: 'rgba(255,255,255,0.65)' },
+  stepHeader: { flexDirection: 'row', alignItems: 'center' },
+  stepNum: { backgroundColor: 'rgba(200,180,140,0.2)', borderRadius: 8, width: 36, height: 36, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+  stepNumActive: { backgroundColor: '#1e1e2e' },
+  stepNumText: { fontSize: 12, fontWeight: '800', color: '#8b7e6a' },
+  stepTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#8b7e6a' },
+  chevron: { fontSize: 18, color: '#b0a898', fontWeight: '300' },
+  stepDesc: { marginTop: 16, fontSize: 14, color: '#6b6352', lineHeight: 22, paddingLeft: 50 },
+  cta: { backgroundColor: '#1e1e2e', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 16, marginBottom: 40 },
+  ctaText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

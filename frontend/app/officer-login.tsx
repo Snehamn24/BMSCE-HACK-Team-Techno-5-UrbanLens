@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
-import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, ScrollView,
-} from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, Modal, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { ENV } from '../config/env';
+import Footer from '../components/Footer';
+
+const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
 
 export default function OfficerLoginScreen() {
   const router = useRouter();
@@ -13,112 +13,77 @@ export default function OfficerLoginScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  const validate = (): boolean => {
-    const e: Record<string, string> = {};
-    if (!email.trim()) e.email = 'Email is required';
-    else if (!email.trim().toLowerCase().endsWith('.gov.in')) e.email = 'Must be a valid .gov.in email';
-    if (!password) e.password = 'Password is required';
-    setErrors(e);
-    return Object.keys(e).length === 0;
-  };
+  const [popup, setPopup] = useState({ visible: false, title: '', msg: '' });
+  const popupScale = useRef(new Animated.Value(0)).current;
+  const showPopup = (t: string, m: string) => { setPopup({ visible: true, title: t, msg: m }); Animated.spring(popupScale, { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }).start(); };
+  const hidePopup = () => { Animated.timing(popupScale, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => setPopup(p => ({ ...p, visible: false }))); };
 
   const handleLogin = async () => {
-    if (!validate()) {
-      return;
-    }
+    const e: Record<string, string> = {};
+    if (!email.trim()) e.email = 'Required';
+    if (!password) e.password = 'Required';
+    setErrors(e); if (Object.keys(e).length > 0) return;
     setLoading(true);
     try {
-      const res = await fetch(`${ENV.API_BASE_URL}/auth/officer-login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: email.trim(), password }),
-      });
+      const res = await fetch(`${ENV.API_BASE_URL}/auth/officer-login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password }) });
       const data = await res.json();
-      if (!res.ok) {
-        setErrors(prev => ({ ...prev, email: data.error || 'Invalid credentials' }));
-        return;
-      }
-      login(data.token, data.user);
-      if (Platform.OS === 'web') {
-        window.alert('🎉 Login Successful! Welcome Officer!');
-        router.replace('/officer-dashboard');
-      } else {
-        router.replace('/officer-dashboard');
-      }
-    } catch (err) {
-      setErrors(prev => ({ ...prev, email: 'Cannot connect to server. Please try again later.' }));
-    } finally {
-      setLoading(false);
-    }
+      if (!res.ok) { showPopup('Authentication Failed', data.error || 'Invalid credentials.'); return; }
+      login(data.token, data.user); router.replace('/officer-dashboard');
+    } catch { showPopup('Connection Error', 'Unable to reach the server.'); } finally { setLoading(false); }
   };
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => { Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }, []);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <View style={styles.iconBox}>
-            <Text style={styles.icon}>👷</Text>
+      <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
+        <Animated.View style={[s.card, glass, { opacity: fadeAnim }]}>
+          <View style={s.header}>
+            <View style={[s.dot, { backgroundColor: '#8b6914' }]} />
+            <Text style={s.title}>Officer Dashboard</Text>
+            <Text style={s.subtitle}>Government email (.gov.in) required</Text>
           </View>
-          <Text style={styles.title}>Officer Login</Text>
-          <Text style={styles.subtitle}>Enter your official .gov.in email to continue</Text>
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Official Email</Text>
-          <TextInput style={[styles.input, errors.email ? { borderColor: '#e53935' } : null]} placeholder="name@dept.gov.in"
-            placeholderTextColor="#aaa" autoCapitalize="none" autoCorrect={false} keyboardType="email-address"
-            value={email} onChangeText={(t) => { setEmail(t); setErrors(prev => ({ ...prev, email: '' })); }} />
-          {errors.email ? <Text style={{ color: '#e53935', fontSize: 12, marginTop: 4, marginLeft: 4 }}>{errors.email}</Text> : null}
-        </View>
-
-        <View style={styles.fieldGroup}>
-          <Text style={styles.label}>Password</Text>
-          <TextInput style={[styles.input, errors.password ? { borderColor: '#e53935' } : null]} placeholder="Enter your password"
-            placeholderTextColor="#aaa" secureTextEntry
-            value={password} onChangeText={(t) => { setPassword(t); setErrors(prev => ({ ...prev, password: '' })); }} />
-          {errors.password ? <Text style={{ color: '#e53935', fontSize: 12, marginTop: 4, marginLeft: 4 }}>{errors.password}</Text> : null}
-        </View>
-
-        <TouchableOpacity style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/login')}>
-          <Text style={styles.backText}>← Back to role selection</Text>
-        </TouchableOpacity>
+          <Text style={s.label}>Official Email</Text>
+          <TextInput style={[s.input, errors.email && s.inputErr]} placeholder="name@dept.gov.in" placeholderTextColor="#b0a898" autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={v => { setEmail(v); setErrors(p => ({ ...p, email: '' })); }} />
+          <Text style={s.label}>Password</Text>
+          <TextInput style={[s.input, errors.password && s.inputErr]} placeholder="Enter your password" placeholderTextColor="#b0a898" secureTextEntry value={password} onChangeText={v => { setPassword(v); setErrors(p => ({ ...p, password: '' })); }} />
+          <TouchableOpacity style={[s.button, { backgroundColor: '#8b6914' }, loading && { opacity: 0.6 }]} onPress={handleLogin} disabled={loading}>
+            <Text style={s.buttonText}>{loading ? 'Authenticating...' : 'Sign In'}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.backBtn} onPress={() => router.replace('/login')}><Text style={s.backText}>&#8592; Back to role selection</Text></TouchableOpacity>
+        </Animated.View>
+        <Footer />
       </ScrollView>
+      <Modal visible={popup.visible} transparent animationType="none" onRequestClose={hidePopup}>
+        <View style={s.modalOv}><Animated.View style={[s.modalC, glass, { transform: [{ scale: popupScale }] }]}>
+          <Text style={s.modalT}>{popup.title}</Text><Text style={s.modalM}>{popup.msg}</Text>
+          <TouchableOpacity style={[s.modalBtn, { backgroundColor: '#8b6914' }]} onPress={hidePopup}><Text style={s.modalBtnT}>Dismiss</Text></TouchableOpacity>
+        </Animated.View></View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flexGrow: 1, justifyContent: 'center', padding: 28, backgroundColor: '#f0f7f0' },
-  header: { alignItems: 'center', marginBottom: 32 },
-  iconBox: {
-    width: 72, height: 72, borderRadius: 20, backgroundColor: '#e8f5e9',
-    justifyContent: 'center', alignItems: 'center', marginBottom: 12,
-  },
-  icon: { fontSize: 36 },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1b5e20' },
-  subtitle: { fontSize: 13, color: '#666', marginTop: 4, textAlign: 'center', paddingHorizontal: 20 },
-  fieldGroup: { marginBottom: 16 },
-  label: { fontSize: 13, fontWeight: '600', color: '#444', marginBottom: 6, marginLeft: 2 },
-  input: {
-    height: 52, borderWidth: 1.5, borderColor: '#c8e6c9', borderRadius: 12,
-    paddingHorizontal: 16, backgroundColor: '#fff', fontSize: 16, color: '#333',
-  },
-  button: {
-    backgroundColor: '#2e7d32', paddingVertical: 15, borderRadius: 12,
-    alignItems: 'center', marginTop: 8,
-    shadowColor: '#2e7d32', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 6, elevation: 5,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { color: '#fff', fontSize: 17, fontWeight: 'bold' },
-  backButton: { marginTop: 16, alignItems: 'center' },
-  backText: { color: '#999', fontSize: 13 },
+const s = StyleSheet.create({
+  page: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  card: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 24, padding: 36, width: '100%', maxWidth: 440, borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)', marginBottom: 40 },
+  header: { alignItems: 'center', marginBottom: 28 },
+  dot: { width: 10, height: 10, borderRadius: 5, marginBottom: 16 },
+  title: { fontSize: 24, fontWeight: '800', color: '#1e1e2e' },
+  subtitle: { fontSize: 13, color: '#8b7e6a', marginTop: 4 },
+  label: { fontSize: 11, fontWeight: '700', color: '#1e1e2e', marginBottom: 6, marginTop: 16, textTransform: 'uppercase', letterSpacing: 0.8 },
+  input: { height: 48, borderWidth: 1, borderColor: 'rgba(200,180,140,0.3)', borderRadius: 12, paddingHorizontal: 14, backgroundColor: 'rgba(255,255,255,0.6)', fontSize: 14, color: '#1e1e2e' },
+  inputErr: { borderColor: '#c9a227' },
+  button: { paddingVertical: 15, borderRadius: 12, alignItems: 'center', marginTop: 24 },
+  buttonText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  backBtn: { marginTop: 16, alignItems: 'center' },
+  backText: { color: '#b0a898', fontSize: 12 },
+  modalOv: { flex: 1, backgroundColor: 'rgba(30,30,46,0.3)', justifyContent: 'center', alignItems: 'center', padding: 30 },
+  modalC: { backgroundColor: 'rgba(255,255,255,0.85)', borderRadius: 20, padding: 32, width: '100%', maxWidth: 380, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)' },
+  modalT: { fontSize: 18, fontWeight: '800', color: '#1e1e2e', marginBottom: 10 },
+  modalM: { fontSize: 14, color: '#6b6352', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
+  modalBtn: { paddingVertical: 12, paddingHorizontal: 36, borderRadius: 12 },
+  modalBtnT: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

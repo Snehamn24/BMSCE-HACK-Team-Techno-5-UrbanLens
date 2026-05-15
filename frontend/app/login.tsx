@@ -1,108 +1,63 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import Footer from '../components/Footer';
+
+const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
 
 const roles = [
-  {
-    id: 'citizen',
-    emoji: '🏠',
-    title: 'Citizen',
-    subtitle: 'Report civic issues & earn points',
-    color: '#1e90ff',
-    bgColor: '#e3f2fd',
-    route: '/citizen-login',
-  },
-  {
-    id: 'officer',
-    emoji: '👷',
-    title: 'Municipal Officer',
-    subtitle: 'Review & resolve assigned issues',
-    color: '#2e7d32',
-    bgColor: '#e8f5e9',
-    route: '/officer-login',
-  },
-  {
-    id: 'admin',
-    emoji: '🛡️',
-    title: 'Admin / Supervisor',
-    subtitle: 'Analytics, monitoring & management',
-    color: '#6a1b9a',
-    bgColor: '#f3e5f5',
-    route: '/admin-login',
-  },
+  { id: 'citizen', title: 'Citizen Portal', desc: 'Report civic issues, track resolution progress, and earn participation points.', color: '#1e1e2e', route: '/citizen-login' },
+  { id: 'officer', title: 'Officer Dashboard', desc: 'Review assigned issues, update statuses, and submit resolution reports.', color: '#8b6914', route: '/officer-login' },
+  { id: 'admin', title: 'Admin Console', desc: 'Manage wards, create officer accounts, and monitor analytics.', color: '#c9a227', route: '/admin-login' },
 ];
 
 export default function LoginScreen() {
   const router = useRouter();
-
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.logo}>🔍</Text>
-        <Text style={styles.title}>Urban Lens</Text>
-        <Text style={styles.subtitle}>Select your role to continue</Text>
-      </View>
-
-      {roles.map((role) => (
-        <TouchableOpacity
-          key={role.id}
-          style={[styles.card, { borderLeftColor: role.color }]}
-          onPress={() => router.push(role.route as any)}
-          activeOpacity={0.7}
-          accessibilityLabel={`Login as ${role.title}`}
-          accessibilityRole="button"
-        >
-          <View style={[styles.iconBox, { backgroundColor: role.bgColor }]}>
-            <Text style={styles.emoji}>{role.emoji}</Text>
-          </View>
-          <View style={styles.cardText}>
-            <Text style={[styles.cardTitle, { color: role.color }]}>{role.title}</Text>
-            <Text style={styles.cardSubtitle}>{role.subtitle}</Text>
-          </View>
-          <Text style={[styles.arrow, { color: role.color }]}>›</Text>
+    <ScrollView contentContainerStyle={s.page}>
+      <View style={[s.card, glass]}>
+        <View style={s.header}>
+          <View style={s.logoDot} />
+          <Text style={s.title}>Dashboard Access</Text>
+          <Text style={s.subtitle}>Select your role to continue to the appropriate portal.</Text>
+        </View>
+        {roles.map((role) => (
+          <TouchableOpacity key={role.id} style={s.roleCard}
+            onPress={() => router.push(role.route as any)} activeOpacity={0.7}>
+            <View style={[s.roleAccent, { backgroundColor: role.color }]} />
+            <View style={s.roleText}>
+              <Text style={[s.roleName, { color: role.color }]}>{role.title}</Text>
+              <Text style={s.roleDesc}>{role.desc}</Text>
+            </View>
+            <Text style={[s.arrow, { color: role.color }]}>&#8594;</Text>
+          </TouchableOpacity>
+        ))}
+        <View style={s.divider} />
+        <TouchableOpacity style={s.signupCta} onPress={() => router.push('/signup')}>
+          <Text style={s.signupLabel}>New to UrbanLens?</Text>
+          <Text style={s.signupLink}>Create a Citizen Account &#8594;</Text>
         </TouchableOpacity>
-      ))}
-
-      <View style={styles.divider} />
-
-      <TouchableOpacity
-        style={styles.signupButton}
-        onPress={() => router.push('/signup')}
-        accessibilityLabel="Create new citizen account"
-        accessibilityRole="button"
-      >
-        <Text style={styles.signupText}>
-          New citizen? <Text style={styles.signupLink}>Create Account</Text>
-        </Text>
-      </TouchableOpacity>
+      </View>
+      <Footer />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, backgroundColor: '#f4f6fb', justifyContent: 'center' },
-  header: { alignItems: 'center', marginBottom: 36 },
-  logo: { fontSize: 56, marginBottom: 8 },
-  title: { fontSize: 32, fontWeight: 'bold', color: '#1a1a2e' },
-  subtitle: { fontSize: 15, color: '#888', marginTop: 6 },
-  card: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff',
-    borderRadius: 16, padding: 18, marginBottom: 14,
-    borderLeftWidth: 5, shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08,
-    shadowRadius: 8, elevation: 3,
-  },
-  iconBox: {
-    width: 56, height: 56, borderRadius: 16,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  emoji: { fontSize: 28 },
-  cardText: { flex: 1, marginLeft: 14 },
-  cardTitle: { fontSize: 17, fontWeight: '700', marginBottom: 3 },
-  cardSubtitle: { fontSize: 13, color: '#888', lineHeight: 18 },
-  arrow: { fontSize: 32, fontWeight: 'bold', marginLeft: 8 },
-  divider: { height: 1, backgroundColor: '#e0e0e0', marginVertical: 20 },
-  signupButton: { alignItems: 'center', paddingVertical: 10 },
-  signupText: { fontSize: 14, color: '#666' },
-  signupLink: { color: '#1e90ff', fontWeight: 'bold' },
+const s = StyleSheet.create({
+  page: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 24, minHeight: '100%' as any },
+  card: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 24, padding: 36, width: '100%', maxWidth: 480, borderWidth: 1, borderColor: 'rgba(200,180,140,0.25)', marginBottom: 40 },
+  header: { alignItems: 'center', marginBottom: 32 },
+  logoDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#c9a227', marginBottom: 16 },
+  title: { fontSize: 26, fontWeight: '800', color: '#1e1e2e', letterSpacing: -0.3 },
+  subtitle: { fontSize: 13, color: '#8b7e6a', marginTop: 6, textAlign: 'center' },
+  roleCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.5)', borderRadius: 16, padding: 18, marginBottom: 10, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  roleAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 3 },
+  roleText: { flex: 1, marginLeft: 8 },
+  roleName: { fontSize: 15, fontWeight: '700', marginBottom: 3 },
+  roleDesc: { fontSize: 12, color: '#8b7e6a', lineHeight: 18 },
+  arrow: { fontSize: 18, fontWeight: '600', marginLeft: 12 },
+  divider: { height: 1, backgroundColor: 'rgba(200,180,140,0.25)', marginVertical: 20 },
+  signupCta: { alignItems: 'center', padding: 16, backgroundColor: 'rgba(201,162,39,0.08)', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(201,162,39,0.15)' },
+  signupLabel: { fontSize: 12, color: '#8b7e6a' },
+  signupLink: { fontSize: 14, color: '#1e1e2e', fontWeight: '700', marginTop: 4 },
 });

@@ -10,7 +10,7 @@ const SALT_ROUNDS = 10;
 // ─── Create Officer (Admin only) ─────────────────────────────
 router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
   try {
-    const { fullName, phone, municipalArea, email, password } = req.body;
+    const { fullName, phone, municipalArea, email, password, wardId } = req.body;
 
     if (!fullName || !phone || !municipalArea || !email || !password) {
       return res.status(400).json({ error: 'All fields are required.' });
@@ -35,13 +35,17 @@ router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
       return res.status(409).json({ error: 'Officer with this email already exists.' });
     }
 
+    // Ensure ward_id column exists
+    try { await pool.query('ALTER TABLE officers ADD COLUMN IF NOT EXISTS ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL'); } catch (e) {}
+
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    const parsedWardId = wardId ? parseInt(wardId) : null;
 
     const result = await pool.query(
-      `INSERT INTO officers (full_name, phone, municipal_area, email, password_hash)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, full_name, phone, municipal_area, email, created_at`,
-      [fullName, phone, municipalArea, normalizedEmail, passwordHash]
+      `INSERT INTO officers (full_name, phone, municipal_area, email, password_hash, ward_id)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, full_name, phone, municipal_area, email, ward_id, created_at`,
+      [fullName, phone, municipalArea, normalizedEmail, passwordHash, parsedWardId]
     );
 
     const officer = result.rows[0];
@@ -54,6 +58,7 @@ router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
         phone: officer.phone,
         municipalArea: officer.municipal_area,
         email: officer.email,
+        wardId: officer.ward_id,
         createdAt: officer.created_at,
       },
     });
@@ -67,8 +72,10 @@ router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
 router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT id, full_name, phone, municipal_area, email, issues_resolved, created_at
-       FROM officers ORDER BY created_at DESC`
+      `SELECT o.id, o.full_name, o.phone, o.municipal_area, o.email, o.issues_resolved, o.ward_id, o.created_at,
+              w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area
+       FROM officers o LEFT JOIN wards w ON o.ward_id = w.id
+       ORDER BY o.created_at DESC`
     );
 
     const officers = result.rows.map(o => ({
@@ -78,6 +85,10 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
       municipalArea: o.municipal_area,
       email: o.email,
       issuesResolved: o.issues_resolved,
+      wardId: o.ward_id,
+      wardOfficeName: o.ward_office_name,
+      wardNumber: o.ward_number,
+      wardArea: o.ward_area,
       createdAt: o.created_at,
     }));
 

@@ -1,154 +1,69 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import Footer from '../components/Footer';
+
+const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
 
 export default function About() {
   const router = useRouter();
-
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Hero Banner */}
-      <View style={styles.heroBanner}>
-        <Text style={styles.heroEmoji}>🏙️</Text>
-        <Text style={styles.heroTitle}>Urban Lens</Text>
-        <Text style={styles.heroTagline}>AI-Powered Civic Infrastructure Tracker</Text>
+    <ScrollView contentContainerStyle={s.container}>
+      <View style={s.hero}>
+        <Text style={s.heroLabel}>ABOUT THE PLATFORM</Text>
+        <Text style={s.heroTitle}>UrbanLens</Text>
+        <Text style={s.heroTag}>AI-Powered Civic Infrastructure Tracker for Indian Cities</Text>
       </View>
-
-      {/* Mission */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>🎯 Our Mission</Text>
-        <Text style={styles.cardText}>
-          Urban Lens bridges the gap between citizens and local authorities by making it effortless
-          to report, track, and resolve civic infrastructure problems in real time.
-        </Text>
+      <View style={[s.card, glass]}>
+        <Text style={s.cardLabel}>MISSION</Text>
+        <Text style={s.cardTitle}>Why UrbanLens Exists</Text>
+        <Text style={s.cardText}>Rapid urbanization in Indian cities outpaces infrastructure maintenance. Citizens complain about potholes, broken streetlights, and illegal garbage dumps — but data is fragmented and hard for municipal bodies like BBMP to process. UrbanLens bridges this gap with AI-driven validation, classification, and routing.</Text>
       </View>
-
-      {/* What We Do */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>⚡ What We Do</Text>
-        {[
-          'AI-powered issue detection from photos',
-          'Automatic severity & category classification',
-          'Real-time tracking & status updates',
-          'Gamified citizen engagement with points',
-          'Direct reporting to local authorities',
-        ].map((item, i) => (
-          <View key={i} style={styles.bulletRow}>
-            <Text style={styles.bullet}>✅</Text>
-            <Text style={styles.bulletText}>{item}</Text>
+      <View style={[s.card, glass]}>
+        <Text style={s.cardLabel}>CAPABILITIES</Text>
+        <Text style={s.cardTitle}>Core Features</Text>
+        {['Computer Vision — Gemini AI detects issue type and assigns severity from uploaded photos',
+          'Geo-Deduplication — PostGIS merges reports within 10m radius to prevent spam',
+          'Gamification — Points and badge system (Bronze/Silver/Gold) encourages civic participation',
+          'Ward Routing — Issues routed to correct municipal ward for efficient resolution',
+          'Resolution Tracking — Before/after photo comparison with citizen feedback ratings'].map((item, i) => (
+          <View key={i} style={s.bulletRow}>
+            <View style={s.bullet} />
+            <Text style={s.bulletText}>{item}</Text>
           </View>
         ))}
       </View>
-
-      {/* Team */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>👥 Built By</Text>
-        <Text style={styles.cardText}>
-          Team Techno-5 — BMSCE Hackathon 2026{'\n'}
-          Passionate engineers building smarter cities.
-        </Text>
+      <View style={[s.card, glass]}>
+        <Text style={s.cardLabel}>ARCHITECTURE</Text>
+        <Text style={s.cardTitle}>Ward-Based Routing System</Text>
+        <Text style={s.cardText}>Administrators create municipal ward offices through the admin console. Citizens select their ward when filing reports. Issues are automatically assigned to officers based on ward jurisdiction, ensuring every report reaches the correct authority.</Text>
       </View>
-
-      {/* CTA */}
-      <TouchableOpacity
-        style={styles.ctaButton}
-        onPress={() => router.push('/issues')}
-        accessibilityLabel="Report an issue"
-        accessibilityRole="button"
-      >
-        <Text style={styles.ctaText}>🚨 Report an Issue Now</Text>
+      <View style={[s.card, glass]}>
+        <Text style={s.cardLabel}>TEAM</Text>
+        <Text style={s.cardTitle}>Built By</Text>
+        <Text style={s.cardText}>Team Techno-5 — BMSCE MCA Hackathon 2026{'\n'}Technology: Gemini Vision AI, PostGIS, Node.js, React Native, PostgreSQL</Text>
+      </View>
+      <TouchableOpacity style={s.cta} onPress={() => router.push('/issues')}>
+        <Text style={s.ctaText}>Report a Civic Issue</Text>
       </TouchableOpacity>
+      <Footer />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    backgroundColor: '#f4f6fb',
-    paddingBottom: 40,
-  },
-  heroBanner: {
-    backgroundColor: '#1e90ff',
-    borderRadius: 20,
-    padding: 28,
-    alignItems: 'center',
-    marginBottom: 20,
-    shadowColor: '#1e90ff',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  heroEmoji: {
-    fontSize: 48,
-    marginBottom: 8,
-  },
-  heroTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 6,
-  },
-  heroTagline: {
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1a1a2e',
-    marginBottom: 12,
-  },
-  cardText: {
-    fontSize: 15,
-    color: '#555',
-    lineHeight: 24,
-  },
-  bulletRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  bullet: {
-    fontSize: 14,
-    marginRight: 10,
-    marginTop: 2,
-  },
-  bulletText: {
-    fontSize: 15,
-    color: '#444',
-    flex: 1,
-    lineHeight: 22,
-  },
-  ctaButton: {
-    backgroundColor: '#1e90ff',
-    paddingVertical: 16,
-    borderRadius: 14,
-    alignItems: 'center',
-    marginTop: 8,
-    shadowColor: '#1e90ff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  ctaText: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: 'bold',
-  },
+const s = StyleSheet.create({
+  container: { padding: 20, paddingHorizontal: 40, paddingBottom: 0 },
+  hero: { paddingVertical: 32, marginBottom: 20 },
+  heroLabel: { fontSize: 11, fontWeight: '700', color: '#c9a227', letterSpacing: 2, marginBottom: 12 },
+  heroTitle: { fontSize: 40, fontWeight: '800', color: '#1e1e2e', letterSpacing: -1, marginBottom: 10 },
+  heroTag: { fontSize: 15, color: '#6b6352', lineHeight: 24 },
+  card: { backgroundColor: 'rgba(255,255,255,0.55)', borderRadius: 20, padding: 28, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(200,180,140,0.2)' },
+  cardLabel: { fontSize: 10, fontWeight: '700', color: '#c9a227', letterSpacing: 1.5, marginBottom: 6 },
+  cardTitle: { fontSize: 18, fontWeight: '800', color: '#1e1e2e', marginBottom: 12 },
+  cardText: { fontSize: 14, color: '#6b6352', lineHeight: 22 },
+  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  bullet: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#c9a227', marginRight: 12, marginTop: 8 },
+  bulletText: { fontSize: 13, color: '#6b6352', flex: 1, lineHeight: 20 },
+  cta: { backgroundColor: '#1e1e2e', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 8, marginBottom: 40 },
+  ctaText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

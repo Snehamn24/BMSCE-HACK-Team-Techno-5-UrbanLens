@@ -13,6 +13,7 @@ interface User {
   badge?: string;
   municipalArea?: string;
   accessCode?: string;
+  wardId?: number;
 }
 
 interface AuthContextType {
