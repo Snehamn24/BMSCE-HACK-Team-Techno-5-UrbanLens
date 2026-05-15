@@ -7,18 +7,17 @@ const { verifyToken, requireRole } = require('../middleware/auth');
 const router = express.Router();
 const SALT_ROUNDS = 10;
 
-// ─── Create Officer (Admin only) ─────────────────────────────
-router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
+// ─── Create Officer handler (shared by /create and /register) ─
+const createOfficerHandler = async (req, res) => {
   try {
     const { fullName, phone, municipalArea, email, password, wardId } = req.body;
 
-    if (!fullName || !phone || !municipalArea || !email || !password) {
-      return res.status(400).json({ error: 'All fields are required.' });
+    if (!fullName || !email || !password) {
+      return res.status(400).json({ error: 'Name, email, and password are required.' });
     }
 
-    if (!/^[6-9]\d{9}$/.test(phone)) {
-      return res.status(400).json({ error: 'Invalid Indian mobile number.' });
-    }
+    // Phone is optional — default to '0000000000' if not provided
+    const officerPhone = phone || '0000000000';
 
     const normalizedEmail = email.toLowerCase();
     if (!normalizedEmail.endsWith('.gov.in')) {
@@ -38,14 +37,26 @@ router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
     // Ensure ward_id column exists
     try { await pool.query('ALTER TABLE officers ADD COLUMN IF NOT EXISTS ward_id INTEGER REFERENCES wards(id) ON DELETE SET NULL'); } catch (e) {}
 
-    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+    // Derive municipalArea from ward if not provided
+    let finalMunicipalArea = municipalArea || '';
     const parsedWardId = wardId ? parseInt(wardId) : null;
+    if (!finalMunicipalArea && parsedWardId) {
+      try {
+        const wardResult = await pool.query('SELECT office_name, area_name FROM wards WHERE id = $1', [parsedWardId]);
+        if (wardResult.rows.length > 0) {
+          finalMunicipalArea = `${wardResult.rows[0].area_name} (${wardResult.rows[0].office_name})`;
+        }
+      } catch (e) {}
+    }
+    if (!finalMunicipalArea) finalMunicipalArea = 'Unassigned';
+
+    const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const result = await pool.query(
       `INSERT INTO officers (full_name, phone, municipal_area, email, password_hash, ward_id)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, full_name, phone, municipal_area, email, ward_id, created_at`,
-      [fullName, phone, municipalArea, normalizedEmail, passwordHash, parsedWardId]
+      [fullName, officerPhone, finalMunicipalArea, normalizedEmail, passwordHash, parsedWardId]
     );
 
     const officer = result.rows[0];
@@ -66,7 +77,11 @@ router.post('/create', verifyToken, requireRole('admin'), async (req, res) => {
     console.error('Create officer error:', error);
     res.status(500).json({ error: 'Server error creating officer.' });
   }
-});
+};
+
+// Both /create and /register point to the same handler
+router.post('/create', verifyToken, requireRole('admin'), createOfficerHandler);
+router.post('/register', verifyToken, requireRole('admin'), createOfficerHandler);
 
 // ─── List All Officers (Admin only) ──────────────────────────
 router.get('/', verifyToken, requireRole('admin'), async (req, res) => {

@@ -43,14 +43,6 @@ export default function SignUpScreen() {
     } catch { showPopup('Connection Error', 'Unable to reach the server.'); } finally { setLoading(false); }
   };
 
-  const Field = ({ label, value, setter, k, placeholder, secure, keyboard, autoCapitalize }: any) => (
-    <View style={{ marginBottom: 10 }}>
-      <Text style={s.label}>{label}</Text>
-      <TextInput style={[s.input, errors[k] && s.inputErr]} placeholder={placeholder} placeholderTextColor="#b0a898" secureTextEntry={secure} keyboardType={keyboard || 'default'} autoCapitalize={autoCapitalize || 'none'} value={value} onChangeText={(v: string) => { setter(v); setErrors(p => ({ ...p, [k]: '' })); }} />
-      {errors[k] ? <Text style={s.err}>{errors[k]}</Text> : null}
-    </View>
-  );
-
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView contentContainerStyle={s.page} keyboardShouldPersistTaps="handled">
@@ -60,12 +52,37 @@ export default function SignUpScreen() {
             <Text style={s.title}>Create Account</Text>
             <Text style={s.subtitle}>Join UrbanLens as a citizen reporter</Text>
           </View>
-          <Field label="Full Name" value={fullName} setter={setFullName} k="fullName" placeholder="Your full name" autoCapitalize="words" />
-          <Field label="Username" value={username} setter={setUsername} k="username" placeholder="Choose a username" />
-          <Field label="Phone Number" value={phone} setter={setPhone} k="phone" placeholder="10-digit mobile" keyboard="phone-pad" />
-          <Field label="Address" value={address} setter={setAddress} k="address" placeholder="Your address" autoCapitalize="words" />
-          <Field label="Password" value={password} setter={setPassword} k="password" placeholder="Min 6 characters" secure />
-          <Field label="Confirm Password" value={confirmPassword} setter={setConfirmPassword} k="confirmPassword" placeholder="Re-enter password" secure />
+
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Full Name</Text>
+            <TextInput style={[s.input, errors.fullName && s.inputErr]} placeholder="Your full name" placeholderTextColor="#b0a898" autoCapitalize="words" value={fullName} onChangeText={(v: string) => { setFullName(v); setErrors(p => ({ ...p, fullName: '' })); }} />
+            {errors.fullName ? <Text style={s.err}>{errors.fullName}</Text> : null}
+          </View>
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Username</Text>
+            <TextInput style={[s.input, errors.username && s.inputErr]} placeholder="Choose a username" placeholderTextColor="#b0a898" autoCapitalize="none" value={username} onChangeText={(v: string) => { setUsername(v); setErrors(p => ({ ...p, username: '' })); }} />
+            {errors.username ? <Text style={s.err}>{errors.username}</Text> : null}
+          </View>
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Phone Number</Text>
+            <TextInput style={[s.input, errors.phone && s.inputErr]} placeholder="10-digit mobile" placeholderTextColor="#b0a898" keyboardType="phone-pad" autoCapitalize="none" value={phone} onChangeText={(v: string) => { setPhone(v); setErrors(p => ({ ...p, phone: '' })); }} />
+            {errors.phone ? <Text style={s.err}>{errors.phone}</Text> : null}
+          </View>
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Address</Text>
+            <TextInput style={[s.input, errors.address && s.inputErr]} placeholder="Your address" placeholderTextColor="#b0a898" autoCapitalize="words" value={address} onChangeText={(v: string) => { setAddress(v); setErrors(p => ({ ...p, address: '' })); }} />
+            {errors.address ? <Text style={s.err}>{errors.address}</Text> : null}
+          </View>
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Password</Text>
+            <TextInput style={[s.input, errors.password && s.inputErr]} placeholder="Min 6 characters" placeholderTextColor="#b0a898" secureTextEntry autoCapitalize="none" value={password} onChangeText={(v: string) => { setPassword(v); setErrors(p => ({ ...p, password: '' })); }} />
+            {errors.password ? <Text style={s.err}>{errors.password}</Text> : null}
+          </View>
+          <View style={{ marginBottom: 10 }}>
+            <Text style={s.label}>Confirm Password</Text>
+            <TextInput style={[s.input, errors.confirmPassword && s.inputErr]} placeholder="Re-enter password" placeholderTextColor="#b0a898" secureTextEntry autoCapitalize="none" value={confirmPassword} onChangeText={(v: string) => { setConfirmPassword(v); setErrors(p => ({ ...p, confirmPassword: '' })); }} />
+            {errors.confirmPassword ? <Text style={s.err}>{errors.confirmPassword}</Text> : null}
+          </View>
           <TouchableOpacity style={[s.button, loading && { opacity: 0.6 }]} onPress={handleSignUp} disabled={loading}>
             <Text style={s.buttonText}>{loading ? 'Creating Account...' : 'Create Account'}</Text>
           </TouchableOpacity>

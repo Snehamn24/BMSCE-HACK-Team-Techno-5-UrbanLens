@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { ENV } from '../config/env';
 import Footer from '../components/Footer';
 
-type Issue = { id: number; type: string; status: string; severity: string; description: string; image_url: string; after_image_url: string; latitude: number; longitude: number; reported_at: string; resolved_at: string; upvotes: number; feedback_rating: number | null; feedback_text: string | null; ward_office_name?: string; ward_number?: string; ward_area?: string; ai_confidence?: number; ai_detected_type?: string; };
+type Issue = { id: number; type: string; status: string; severity: string; description: string; image_url: string; after_image_url: string; latitude: number; longitude: number; reported_at: string; resolved_at: string; upvotes: number; feedback_rating: number | null; feedback_text: string | null; ward_office_name?: string; ward_number?: string; ward_area?: string; ai_confidence?: number; ai_detected_type?: string; assigned_contractor?: string; contractor_feedback_rating?: number | null; };
 type Ward = { id: number; office_name: string; ward_no: string; area_name: string; };
 
 const glass: any = Platform.OS === 'web' ? { backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)' } : {};
@@ -26,6 +26,9 @@ export default function CitizenDashboardScreen() {
   const [feedbackRating, setFeedbackRating] = useState(0);
   const [feedbackText, setFeedbackText] = useState('');
   const [submittingFeedback, setSubmittingFeedback] = useState(false);
+  const [ctrRatingModal, setCtrRatingModal] = useState({ visible: false, issueId: 0, contractorId: '' });
+  const [ctrRating, setCtrRating] = useState(0);
+  const [ctrRatingLoading, setCtrRatingLoading] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => { Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start(); }, []);
@@ -52,6 +55,15 @@ export default function CitizenDashboardScreen() {
       const res = await fetch(`${ENV.API_BASE_URL}/issues/${feedbackIssue.id}/feedback`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ rating: feedbackRating, text: feedbackText }) });
       if (res.ok) { setFeedbackVisible(false); fetchData(); }
     } catch {} finally { setSubmittingFeedback(false); }
+  };
+
+  const submitContractorRating = async () => {
+    if (ctrRating === 0) return;
+    setCtrRatingLoading(true);
+    try {
+      const res = await fetch(`${ENV.API_BASE_URL}/contractors/rate/${ctrRatingModal.issueId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ rating: ctrRating }) });
+      if (res.ok) { setCtrRatingModal({ visible: false, issueId: 0, contractorId: '' }); fetchData(); }
+    } catch {} finally { setCtrRatingLoading(false); }
   };
 
   const totalReports = issues.length;
@@ -132,6 +144,11 @@ export default function CitizenDashboardScreen() {
                 <View style={[s.statusBadge, issue.status === 'resolved' ? s.statusResolved : issue.status === 'in_progress' ? s.statusProgress : s.statusPending]}>
                   <Text style={s.statusText}>{issue.status.replace('_', ' ').toUpperCase()}</Text>
                 </View>
+                {issue.upvotes > 1 && (
+                  <View style={{ backgroundColor: issue.upvotes >= 5 ? 'rgba(184,57,59,0.12)' : 'rgba(201,162,39,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '800', color: issue.upvotes >= 5 ? '#b8393b' : '#c9a227' }}>🔥 {issue.upvotes} reports</Text>
+                  </View>
+                )}
               </View>
 
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
@@ -145,8 +162,9 @@ export default function CitizenDashboardScreen() {
               </View>
 
               {issue.image_url && (
-                <TouchableOpacity onPress={() => { setLightboxUri(`${ENV.API_BASE_URL.replace('/api', '')}${issue.image_url}`); setLightboxVisible(true); }}>
-                  <Image source={{ uri: `${ENV.API_BASE_URL.replace('/api', '')}${issue.image_url}` }} style={s.issueThumb} />
+                <TouchableOpacity onPress={() => { setLightboxUri(`${ENV.API_BASE_URL.replace('/api', '')}${issue.image_url}`); setLightboxVisible(true); }} activeOpacity={0.85}>
+                  <Image source={{ uri: `${ENV.API_BASE_URL.replace('/api', '')}${issue.image_url}` }} style={s.issueThumb} resizeMode="cover" />
+                  <Text style={{ fontSize: 10, color: '#b0a898', textAlign: 'center', marginBottom: 6 }}>Tap to enlarge</Text>
                 </TouchableOpacity>
               )}
               <Text style={s.issueDesc}>{issue.description || 'No description provided.'}</Text>
@@ -162,9 +180,9 @@ export default function CitizenDashboardScreen() {
 
               {issue.status === 'resolved' && issue.after_image_url && (
                 <View style={s.resolvedBox}>
-                  <Text style={s.resolvedLabel}>After Fix</Text>
+                  <Text style={s.resolvedLabel}>✅ After Fix</Text>
                   <TouchableOpacity onPress={() => { setLightboxUri(`${ENV.API_BASE_URL.replace('/api', '')}${issue.after_image_url}`); setLightboxVisible(true); }}>
-                    <Image source={{ uri: `${ENV.API_BASE_URL.replace('/api', '')}${issue.after_image_url}` }} style={s.afterThumb} />
+                    <Image source={{ uri: `${ENV.API_BASE_URL.replace('/api', '')}${issue.after_image_url}` }} style={s.afterThumb} resizeMode="cover" />
                   </TouchableOpacity>
                 </View>
               )}
@@ -178,13 +196,26 @@ export default function CitizenDashboardScreen() {
                 <View style={s.feedbackSection}>
                   {issue.feedback_rating ? (
                     <View style={{ alignItems: 'center' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#8b7e6a', marginBottom: 4 }}>Service Rating</Text>
                       <Text style={s.feedbackStars}>{'★'.repeat(issue.feedback_rating)}{'☆'.repeat(5 - issue.feedback_rating)}</Text>
                       {issue.feedback_text ? <Text style={s.feedbackGiven}>"{issue.feedback_text}"</Text> : null}
                     </View>
                   ) : (
                     <TouchableOpacity style={s.feedbackBtn} onPress={() => { setFeedbackIssue(issue); setFeedbackRating(0); setFeedbackText(''); setFeedbackVisible(true); }}>
-                      <Text style={s.feedbackBtnText}>Rate Resolution</Text>
+                      <Text style={s.feedbackBtnText}>⭐ Rate Resolution</Text>
                     </TouchableOpacity>
+                  )}
+                  {issue.assigned_contractor && (
+                    <View style={{ marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(200,180,140,0.15)', paddingTop: 8 }}>
+                      <Text style={{ fontSize: 11, color: '#8b7e6a', marginBottom: 4 }}>Contractor: {issue.assigned_contractor}</Text>
+                      {issue.contractor_feedback_rating ? (
+                        <Text style={s.feedbackStars}>{'★'.repeat(issue.contractor_feedback_rating)}{'☆'.repeat(5 - issue.contractor_feedback_rating)}</Text>
+                      ) : (
+                        <TouchableOpacity style={[s.feedbackBtn, { backgroundColor: 'rgba(74,124,89,0.12)' }]} onPress={() => { setCtrRatingModal({ visible: true, issueId: issue.id, contractorId: issue.assigned_contractor || '' }); setCtrRating(0); }}>
+                          <Text style={[s.feedbackBtnText, { color: '#4a7c59' }]}>⭐ Rate Contractor</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   )}
                 </View>
               )}
@@ -211,6 +242,27 @@ export default function CitizenDashboardScreen() {
             <TouchableOpacity style={s.cancelBtn} onPress={() => setFeedbackVisible(false)}><Text style={{ color: '#6b6352', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
             <TouchableOpacity style={[s.submitBtn, (feedbackRating === 0 || submittingFeedback) && { opacity: 0.5 }]} onPress={submitFeedback} disabled={feedbackRating === 0 || submittingFeedback}>
               <Text style={{ color: '#fff', fontWeight: '700' }}>{submittingFeedback ? 'Submitting...' : 'Submit'}</Text>
+            </TouchableOpacity>
+          </View>
+        </View></View>
+      </Modal>
+
+      {/* Contractor Rating Modal */}
+      <Modal visible={ctrRatingModal.visible} transparent animationType="slide">
+        <View style={s.modalOv}><View style={[s.modalC, glass]}>
+          <Text style={s.modalTitle}>Rate Contractor</Text>
+          <Text style={s.modalDesc}>How was contractor {ctrRatingModal.contractorId}'s work?</Text>
+          <View style={s.ratingRow}>
+            {[1, 2, 3, 4, 5].map(star => (
+              <TouchableOpacity key={star} onPress={() => setCtrRating(star)}>
+                <Text style={[s.ratingStar, ctrRating >= star && s.ratingStarActive]}>{ctrRating >= star ? '★' : '☆'}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <View style={s.modalActions}>
+            <TouchableOpacity style={s.cancelBtn} onPress={() => setCtrRatingModal({ visible: false, issueId: 0, contractorId: '' })}><Text style={{ color: '#6b6352', fontWeight: '700' }}>Cancel</Text></TouchableOpacity>
+            <TouchableOpacity style={[s.submitBtn, (ctrRating === 0 || ctrRatingLoading) && { opacity: 0.5 }]} onPress={submitContractorRating} disabled={ctrRating === 0 || ctrRatingLoading}>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{ctrRatingLoading ? 'Submitting...' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </View></View>
@@ -272,14 +324,14 @@ const s = StyleSheet.create({
   sevText: { fontSize: 10, fontWeight: '700' },
   aiBadge: { backgroundColor: 'rgba(201,162,39,0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   aiBadgeText: { fontSize: 10, fontWeight: '700', color: '#8b6914' },
-  issueThumb: { width: '100%', height: 120, borderRadius: 12, marginBottom: 8 },
+  issueThumb: { width: '100%', height: 180, borderRadius: 14, marginBottom: 4, backgroundColor: '#e8e2d8' },
   issueDesc: { fontSize: 14, color: '#6b6352', marginBottom: 8, lineHeight: 20 },
   wardBadge: { backgroundColor: 'rgba(30,30,46,0.05)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 8 },
   wardBadgeText: { fontSize: 11, color: '#1e1e2e', fontWeight: '600' },
   mapContainer: { width: '100%', maxWidth: 320, height: 100, marginBottom: 10, borderRadius: 8, overflow: 'hidden' },
   resolvedBox: { backgroundColor: 'rgba(74,124,89,0.08)', borderRadius: 12, padding: 10, marginBottom: 8 },
   resolvedLabel: { fontSize: 11, fontWeight: '700', color: '#4a7c59', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
-  afterThumb: { width: '100%', height: 70, borderRadius: 8 },
+  afterThumb: { width: '100%', height: 140, borderRadius: 10, backgroundColor: '#e8e2d8' },
   issueFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
   issueDate: { fontSize: 12, color: '#b0a898' },
   issueUpvotes: { fontSize: 12, color: '#c9a227', fontWeight: '600' },

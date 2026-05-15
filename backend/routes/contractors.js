@@ -66,6 +66,23 @@ router.get('/', verifyToken, requireRole('admin'), async (req, res) => {
   }
 });
 
+// List contractors by ward (officer/admin)
+router.get('/by-ward/:wardId', verifyToken, requireRole('officer', 'admin'), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT c.contractor_id, c.name, c.phone, c.rating, c.total_ratings, c.jobs_completed,
+             w.office_name, w.ward_no, w.area_name
+      FROM contractors c LEFT JOIN wards w ON c.ward_id = w.id
+      WHERE c.ward_id = $1
+      ORDER BY c.rating DESC, c.jobs_completed DESC
+    `, [req.params.wardId]);
+    res.json({ contractors: result.rows });
+  } catch (e) {
+    console.error('By-ward contractors error:', e);
+    res.status(500).json({ error: 'Server error.' });
+  }
+});
+
 // Get unresolved issues for bidding (contractor)
 router.get('/available-issues', verifyToken, requireRole('contractor'), async (req, res) => {
   try {
@@ -73,7 +90,7 @@ router.get('/available-issues', verifyToken, requireRole('contractor'), async (r
       SELECT i.*, w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area
       FROM issues i LEFT JOIN wards w ON i.ward_id = w.id
       WHERE i.status IN ('pending','in_progress') AND i.assigned_contractor IS NULL
-      ORDER BY i.severity DESC, i.reported_at DESC
+      ORDER BY i.upvotes DESC, i.severity DESC, i.reported_at DESC
     `);
     // Also get any existing bids by this contractor
     const bids = await pool.query('SELECT issue_id, amount, status FROM bids WHERE contractor_id = $1', [req.user.id]);
@@ -133,8 +150,8 @@ router.get('/bids/:issueId', verifyToken, requireRole('admin', 'officer'), async
   }
 });
 
-// Assign a bid / contractor to an issue (admin)
-router.post('/assign/:issueId', verifyToken, requireRole('admin'), async (req, res) => {
+// Assign a bid / contractor to an issue (admin OR officer)
+router.post('/assign/:issueId', verifyToken, requireRole('admin', 'officer'), async (req, res) => {
   try {
     const { contractorId, amount } = req.body;
     await pool.query('UPDATE issues SET assigned_contractor=$1, budget_amount=$2, status=$3 WHERE id=$4',
@@ -149,8 +166,8 @@ router.post('/assign/:issueId', verifyToken, requireRole('admin'), async (req, r
   }
 });
 
-// Mark issue complete (admin)
-router.patch('/complete/:issueId', verifyToken, requireRole('admin'), async (req, res) => {
+// Mark issue complete (admin or officer)
+router.patch('/complete/:issueId', verifyToken, requireRole('admin', 'officer'), async (req, res) => {
   try {
     await pool.query("UPDATE issues SET status='resolved', resolved_at=NOW() WHERE id=$1", [req.params.issueId]);
     const issue = await pool.query('SELECT assigned_contractor FROM issues WHERE id=$1', [req.params.issueId]);
@@ -169,6 +186,10 @@ router.patch('/rate/:issueId', verifyToken, async (req, res) => {
   try {
     const { rating } = req.body;
     if (!rating || rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating 1-5 required.' });
+
+    // Ensure column exists
+    try { await pool.query('ALTER TABLE issues ADD COLUMN IF NOT EXISTS contractor_feedback_rating INTEGER'); } catch(e) {}
+
     await pool.query('UPDATE issues SET contractor_feedback_rating=$1 WHERE id=$2', [rating, req.params.issueId]);
     const issue = await pool.query('SELECT assigned_contractor FROM issues WHERE id=$1', [req.params.issueId]);
     if (issue.rows[0]?.assigned_contractor) {
@@ -177,6 +198,7 @@ router.patch('/rate/:issueId', verifyToken, async (req, res) => {
     }
     res.json({ message: 'Contractor rated.' });
   } catch (e) {
+    console.error('Rate contractor error:', e);
     res.status(500).json({ error: 'Server error.' });
   }
 });

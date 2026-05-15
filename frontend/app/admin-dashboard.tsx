@@ -25,7 +25,7 @@ export default function AdminDashboardScreen() {
   const [wardLoading, setWardLoading] = useState(false);
 
   // Officers
-  const [officerForm, setOfficerForm] = useState({ fullName: '', email: '', password: '', wardId: '' });
+  const [officerForm, setOfficerForm] = useState({ fullName: '', phone: '', municipalArea: '', email: '', password: '', wardId: '' });
   const [officerLoading, setOfficerLoading] = useState(false);
 
   // Contractors
@@ -78,7 +78,7 @@ export default function AdminDashboardScreen() {
     try {
       const res = await fetch(`${ENV.API_BASE_URL}/officers/register`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(officerForm) });
       const d = await res.json();
-      if (res.ok) { showPopup('Officer Created', `${officerForm.fullName} registered.`, true); setOfficerForm({ fullName: '', email: '', password: '', wardId: '' }); }
+      if (res.ok) { showPopup('Officer Created', `${officerForm.fullName} registered.`, true); setOfficerForm({ fullName: '', phone: '', municipalArea: '', email: '', password: '', wardId: '' }); }
       else { showPopup('Error', d.error || 'Failed.'); }
     } catch { showPopup('Error', 'Connection failed.'); } finally { setOfficerLoading(false); }
   };
@@ -205,18 +205,21 @@ export default function AdminDashboardScreen() {
                 <Text style={s.sectionTitle}>Register Officer</Text>
                 <Text style={s.label}>Full Name</Text>
                 <TextInput style={s.input} placeholder="Officer full name" placeholderTextColor="#b0a898" value={officerForm.fullName} onChangeText={v => setOfficerForm(p => ({ ...p, fullName: v }))} />
+                <Text style={s.label}>Phone Number</Text>
+                <TextInput style={s.input} placeholder="10-digit mobile" placeholderTextColor="#b0a898" keyboardType="phone-pad" value={officerForm.phone} onChangeText={v => setOfficerForm(p => ({ ...p, phone: v }))} />
                 <Text style={s.label}>Official Email</Text>
                 <TextInput style={s.input} placeholder="name@dept.gov.in" placeholderTextColor="#b0a898" autoCapitalize="none" keyboardType="email-address" value={officerForm.email} onChangeText={v => setOfficerForm(p => ({ ...p, email: v }))} />
                 <Text style={s.label}>Password</Text>
                 <TextInput style={s.input} placeholder="Set a password" placeholderTextColor="#b0a898" secureTextEntry value={officerForm.password} onChangeText={v => setOfficerForm(p => ({ ...p, password: v }))} />
-                <Text style={s.label}>Assign Ward (optional)</Text>
+                <Text style={s.label}>Assign Ward</Text>
                 <View style={s.wardSelect}>
                   {wards.map(w => (
-                    <TouchableOpacity key={w.id} style={[s.wardOption, officerForm.wardId === String(w.id) && s.wardOptionActive]} onPress={() => setOfficerForm(p => ({ ...p, wardId: String(w.id) }))}>
-                      <Text style={[s.wardOptionText, officerForm.wardId === String(w.id) && { color: '#fff' }]}>{w.office_name}</Text>
+                    <TouchableOpacity key={w.id} style={[s.wardOption, officerForm.wardId === String(w.id) && s.wardOptionActive]} onPress={() => setOfficerForm(p => ({ ...p, wardId: String(w.id), municipalArea: `${w.area_name} (${w.office_name})` }))}>
+                      <Text style={[s.wardOptionText, officerForm.wardId === String(w.id) && { color: '#fff' }]}>{w.office_name} — Ward {w.ward_no}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
+                {officerForm.municipalArea ? <Text style={{ fontSize: 12, color: '#4a7c59', marginTop: 6 }}>Municipal Area: {officerForm.municipalArea}</Text> : null}
                 <TouchableOpacity style={[s.submitBtn, { backgroundColor: '#c9a227' }, officerLoading && { opacity: 0.6 }]} onPress={registerOfficer} disabled={officerLoading}>
                   <Text style={[s.submitBtnText, { color: '#1e1e2e' }]}>{officerLoading ? 'Registering...' : 'Register Officer'}</Text>
                 </TouchableOpacity>

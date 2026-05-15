@@ -15,7 +15,7 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-// Report Issue (Citizen)
+// ─── Report Issue (Citizen) ─────────────────────────────────
 router.post('/', verifyToken, requireRole('citizen'), upload.single('image'), async (req, res) => {
   try {
     const { type, severity, description, latitude, longitude, wardId } = req.body;
@@ -56,8 +56,41 @@ router.post('/', verifyToken, requireRole('citizen'), upload.single('image'), as
       }
     }
 
-    // PostGIS Deduplication: check within 10 meters
+    // PostGIS Deduplication: check within 10 meters for same type
+    // Also check if the SAME USER reported the same issue type nearby
     try {
+      // First check same user + same type + within 50m (same person reporting again)
+      const sameUserNearby = await pool.query(
+        `SELECT id, type, upvotes FROM issues WHERE type = $1 AND status != 'resolved'
+         AND reported_by = $4
+         AND ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, 50)
+         ORDER BY reported_at DESC LIMIT 1`, [aiType, lng, lat, userId]
+      );
+      if (sameUserNearby.rows.length > 0) {
+        const existing = sameUserNearby.rows[0];
+        await pool.query('UPDATE issues SET upvotes = upvotes + 1 WHERE id = $1', [existing.id]);
+        // Update severity based on upvote count (more reports = higher priority)
+        const updatedIssue = await pool.query('SELECT upvotes FROM issues WHERE id = $1', [existing.id]);
+        const newUpvotes = updatedIssue.rows[0].upvotes;
+        let newSeverity = 'low';
+        if (newUpvotes >= 5) newSeverity = 'high';
+        else if (newUpvotes >= 3) newSeverity = 'medium';
+        await pool.query('UPDATE issues SET severity = $1 WHERE id = $2', [newSeverity, existing.id]);
+
+        await pool.query('UPDATE users SET points = points + 5 WHERE id = $1', [userId]);
+        await pool.query('INSERT INTO points_log (user_id, points, reason) VALUES ($1, 5, $2)',
+          [userId, `Re-reported ${aiType} #${existing.id} — priority increased`]);
+        return res.json({
+          message: `Same issue re-reported — priority increased! Count: ${newUpvotes}. +5 pts`,
+          duplicate: true,
+          existingIssueId: existing.id,
+          reportCount: newUpvotes,
+          pointsEarned: 5,
+          aiAnalysis: { type: aiType, severity: newSeverity, confidence: aiConfidence, description: aiDescription, ai_powered: aiPowered }
+        });
+      }
+
+      // Then check any user + same type + within 10m (general dedup)
       const nearby = await pool.query(
         `SELECT id, type, upvotes FROM issues WHERE type = $1 AND status != 'resolved'
          AND ST_DWithin(location::geography, ST_SetSRID(ST_MakePoint($2, $3), 4326)::geography, 10)
@@ -66,15 +99,23 @@ router.post('/', verifyToken, requireRole('citizen'), upload.single('image'), as
       if (nearby.rows.length > 0) {
         const existing = nearby.rows[0];
         await pool.query('UPDATE issues SET upvotes = upvotes + 1 WHERE id = $1', [existing.id]);
+        const updatedIssue = await pool.query('SELECT upvotes FROM issues WHERE id = $1', [existing.id]);
+        const newUpvotes = updatedIssue.rows[0].upvotes;
+        let newSeverity = 'low';
+        if (newUpvotes >= 5) newSeverity = 'high';
+        else if (newUpvotes >= 3) newSeverity = 'medium';
+        await pool.query('UPDATE issues SET severity = $1 WHERE id = $2', [newSeverity, existing.id]);
+
         await pool.query('UPDATE users SET points = points + 5 WHERE id = $1', [userId]);
         await pool.query('INSERT INTO points_log (user_id, points, reason) VALUES ($1, 5, $2)',
           [userId, `Upvoted existing ${aiType} #${existing.id}`]);
         return res.json({
-          message: `Similar ${aiType} nearby — merged! +5 pts`,
+          message: `Similar ${aiType} nearby — merged! Count: ${newUpvotes}. +5 pts`,
           duplicate: true,
           existingIssueId: existing.id,
+          reportCount: newUpvotes,
           pointsEarned: 5,
-          aiAnalysis: { type: aiType, severity: aiSeverity, confidence: aiConfidence, description: aiDescription, ai_powered: aiPowered }
+          aiAnalysis: { type: aiType, severity: newSeverity, confidence: aiConfidence, description: aiDescription, ai_powered: aiPowered }
         });
       }
     } catch (e) { console.log('PostGIS dedup skipped:', e.message); }
@@ -123,12 +164,53 @@ router.post('/', verifyToken, requireRole('citizen'), upload.single('image'), as
   }
 });
 
-// Get Issues (filtered)
+// ─── Get Issues for Officer (ward-scoped, priority-ordered) ──
+router.get('/officer', verifyToken, requireRole('officer'), async (req, res) => {
+  try {
+    const wardId = req.user.wardId;
+    let query, params;
+
+    if (wardId) {
+      query = `SELECT i.*, u.full_name as reporter_name, o.full_name as officer_name,
+                      w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area,
+                      i.assigned_contractor, i.contractor_feedback_rating
+               FROM issues i LEFT JOIN users u ON i.reported_by = u.id
+               LEFT JOIN officers o ON i.assigned_to = o.id
+               LEFT JOIN wards w ON i.ward_id = w.id
+               WHERE i.ward_id = $1
+               ORDER BY i.upvotes DESC, 
+                        CASE i.severity WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+                        i.reported_at DESC`;
+      params = [wardId];
+    } else {
+      // Officer without ward assignment sees all unassigned issues
+      query = `SELECT i.*, u.full_name as reporter_name, o.full_name as officer_name,
+                      w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area,
+                      i.assigned_contractor, i.contractor_feedback_rating
+               FROM issues i LEFT JOIN users u ON i.reported_by = u.id
+               LEFT JOIN officers o ON i.assigned_to = o.id
+               LEFT JOIN wards w ON i.ward_id = w.id
+               ORDER BY i.upvotes DESC,
+                        CASE i.severity WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+                        i.reported_at DESC`;
+      params = [];
+    }
+
+    const result = await pool.query(query, params);
+    res.json({ issues: result.rows });
+  } catch (error) {
+    console.error('Officer issues error:', error);
+    res.status(500).json({ error: 'Server error fetching officer issues.' });
+  }
+});
+
+// ─── Get Issues (filtered) ──────────────────────────────────
 router.get('/', verifyToken, async (req, res) => {
   try {
     const { status, type, assignedTo, reportedBy, wardId } = req.query;
     let query = `SELECT i.*, u.full_name as reporter_name, o.full_name as officer_name,
-                        w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area
+                        w.office_name as ward_office_name, w.ward_no as ward_number, w.area_name as ward_area,
+                        i.assigned_contractor, i.contractor_feedback_rating
                  FROM issues i LEFT JOIN users u ON i.reported_by = u.id 
                  LEFT JOIN officers o ON i.assigned_to = o.id
                  LEFT JOIN wards w ON i.ward_id = w.id WHERE 1=1`;
@@ -139,7 +221,7 @@ router.get('/', verifyToken, async (req, res) => {
     if (assignedTo) { n++; query += ` AND i.assigned_to = $${n}`; params.push(assignedTo); }
     if (reportedBy) { n++; query += ` AND i.reported_by = $${n}`; params.push(reportedBy); }
     if (wardId) { n++; query += ` AND i.ward_id = $${n}`; params.push(wardId); }
-    query += ' ORDER BY i.reported_at DESC';
+    query += ' ORDER BY i.upvotes DESC, i.reported_at DESC';
     const result = await pool.query(query, params);
     res.json({ issues: result.rows });
   } catch (error) {
@@ -148,7 +230,7 @@ router.get('/', verifyToken, async (req, res) => {
   }
 });
 
-// Update Issue Status (Officer/Admin)
+// ─── Update Issue Status (Officer/Admin) ────────────────────
 router.patch('/:id/status', verifyToken, requireRole('officer', 'admin'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -177,8 +259,8 @@ router.patch('/:id/status', verifyToken, requireRole('officer', 'admin'), async 
   }
 });
 
-// Assign Issue (Admin)
-router.patch('/:id/assign', verifyToken, requireRole('admin'), async (req, res) => {
+// ─── Assign Issue to Officer (Admin/Officer) ────────────────
+router.patch('/:id/assign', verifyToken, requireRole('admin', 'officer'), async (req, res) => {
   try {
     const { officerId } = req.body;
     if (!officerId) return res.status(400).json({ error: 'Officer ID required.' });
@@ -189,18 +271,56 @@ router.patch('/:id/assign', verifyToken, requireRole('admin'), async (req, res) 
   } catch (error) { res.status(500).json({ error: 'Server error.' }); }
 });
 
-// Upload After Image (Officer)
+// ─── Upload After Image (Officer) — with 100m location validation ─
 router.post('/:id/after-image', verifyToken, requireRole('officer'), upload.single('afterImage'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'Image required.' });
+
+    const { latitude, longitude } = req.body;
+
+    // If location is provided, validate it's within 100 meters of the original issue
+    if (latitude && longitude) {
+      const lat = parseFloat(latitude);
+      const lng = parseFloat(longitude);
+
+      const issue = await pool.query('SELECT latitude, longitude FROM issues WHERE id = $1', [req.params.id]);
+      if (issue.rows.length === 0) return res.status(404).json({ error: 'Issue not found.' });
+
+      const origLat = issue.rows[0].latitude;
+      const origLng = issue.rows[0].longitude;
+
+      if (origLat && origLng) {
+        // Calculate distance using Haversine formula (in meters)
+        const R = 6371000; // Earth's radius in meters
+        const dLat = (lat - origLat) * Math.PI / 180;
+        const dLng = (lng - origLng) * Math.PI / 180;
+        const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(origLat * Math.PI / 180) * Math.cos(lat * Math.PI / 180) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        const distance = R * c;
+
+        if (distance > 100) {
+          return res.status(400).json({
+            error: `After-image location is ${Math.round(distance)}m from the original issue. Must be within 100m.`,
+            distance: Math.round(distance),
+            maxDistance: 100
+          });
+        }
+      }
+    }
+
     const result = await pool.query('UPDATE issues SET after_image_url = $1 WHERE id = $2 RETURNING *',
       [`/uploads/${req.file.filename}`, req.params.id]);
     if (!result.rows.length) return res.status(404).json({ error: 'Issue not found.' });
-    res.json({ message: 'After image uploaded.', issue: result.rows[0] });
-  } catch (error) { res.status(500).json({ error: 'Server error.' }); }
+    res.json({ message: 'After image uploaded successfully.', issue: result.rows[0] });
+  } catch (error) {
+    console.error('After image upload error:', error);
+    res.status(500).json({ error: 'Server error.' });
+  }
 });
 
-// Submit Feedback (Citizen)
+// ─── Submit Feedback (Citizen) ──────────────────────────────
 router.patch('/:id/feedback', verifyToken, requireRole('citizen'), async (req, res) => {
   try {
     const { id } = req.params;
